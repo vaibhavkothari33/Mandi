@@ -46,18 +46,30 @@ CREATE TABLE IF NOT EXISTS quotes (
   expires_at   TEXT    NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS mandates (
-  id          TEXT PRIMARY KEY,
-  kind        TEXT NOT NULL CHECK (kind IN ('intent','cart')),
-  subject     TEXT NOT NULL,
-  agent_id    TEXT NOT NULL,
-  scope_json  TEXT NOT NULL,
-  cart_hash   TEXT,
-  jws         TEXT NOT NULL,
-  issued_at   TEXT NOT NULL,
-  expires_at  TEXT NOT NULL,
-  consumed_at TEXT
+CREATE TABLE IF NOT EXISTS mandate_keys (
+  kid         TEXT PRIMARY KEY,
+  public_key  TEXT NOT NULL,
+  private_key TEXT,
+  created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS mandates (
+  id           TEXT PRIMARY KEY,
+  kind         TEXT NOT NULL CHECK (kind IN ('intent','cart')),
+  subject      TEXT NOT NULL,
+  agent_id     TEXT NOT NULL,
+  intent_id    TEXT REFERENCES mandates(id),
+  session_id   TEXT,
+  scope_json   TEXT NOT NULL,
+  cart_hash    TEXT,
+  amount_paise INTEGER,
+  jws          TEXT NOT NULL,
+  issued_at    TEXT NOT NULL,
+  expires_at   TEXT NOT NULL,
+  consumed_at  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS mandates_by_intent ON mandates(intent_id);
 
 CREATE TABLE IF NOT EXISTS idempotency_keys (
   key             TEXT PRIMARY KEY,

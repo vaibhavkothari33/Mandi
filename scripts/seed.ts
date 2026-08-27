@@ -1,5 +1,6 @@
 import { db, nowIso } from '../lib/db/client.ts'
 import { registerAgent } from '../lib/agents.ts'
+import { ensureKeypair } from '../lib/mandate/keys.ts'
 
 const PRODUCTS = [
   ['sku_chai_250', 'Assam CTC Chai 250g', 'Strong malty leaf, single estate.', 'grocery', 24900, 40],
@@ -31,4 +32,6 @@ for (const [id, title, description, category, price, stock] of PRODUCTS) {
 
 registerAgent('agent_demo_buyer', 'Demo Buyer Agent', process.env.DEMO_AGENT_SECRET ?? 'demo_secret_do_not_use_in_production')
 
-console.log(`seeded ${PRODUCTS.length} products, 1 agent`)
+const key = ensureKeypair()
+
+console.log(`seeded ${PRODUCTS.length} products, 1 agent, mandate key ${key.kid}`)

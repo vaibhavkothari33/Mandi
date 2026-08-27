@@ -71,3 +71,17 @@ An initial read-then-insert left a window where two concurrent requests with the
 saw "no existing record" and both proceeded. The insert itself is now the lock: the row is
 written with a null response before any work happens, so the second caller finds a claim in
 flight and is refused.
+
+## 2026-08-30
+
+**A scope test asserted the wrong boundary.**
+`a cart is measured against remaining authority` failed expecting `ok` and receiving
+`scope_amount_exceeded`. The test was wrong, not the code: with ₹800 already drawn against a
+₹1,000 intent, remaining authority is ₹200, so the default ₹250 cart is correctly refused.
+Rewrote the case around the exact boundary (₹200 passes, ₹200.01 does not) and added the
+inverse assertion, so the test now demonstrates drawdown rather than accidentally passing.
+
+**Mandate verification order had to be fixed deliberately.**
+An early draft read `payload.kind` and `payload.aud` before checking the signature, which
+means branching on attacker-controlled data. Reordered so nothing in the payload is consulted
+until the signature verifies, with only structural decoding ahead of it.
