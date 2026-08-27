@@ -1,6 +1,6 @@
-import { append } from '@/lib/audit'
-import { ApiError, errorResponse } from '@/lib/http'
+import { errorResponse } from '@/lib/http'
 import { requestId } from '@/lib/ids'
+import { handleMutation } from '@/lib/route'
 import { get, resolveItems, serialize, update } from '@/lib/session/store'
 import { isCompleteFulfillment, type Fulfillment } from '@/lib/session/machine'
 
@@ -19,44 +19,27 @@ export async function GET(request: Request, { params }: Ctx) {
 }
 
 export async function POST(request: Request, { params }: Ctx) {
-  const reqId = request.headers.get('Request-Id') ?? requestId()
-  const agentId = request.headers.get('Agent-Id')
   const { id } = await params
 
-  try {
-    const body = (await request.json().catch(() => {
-      throw new ApiError(400, 'invalid_json', 'request body must be valid JSON')
-    })) as { items?: unknown; fulfillment?: Fulfillment | null }
+  return handleMutation({
+    request,
+    path: `/api/checkout_sessions/${id}`,
+    action: 'session.update',
+    sessionId: id,
+    run: (_auth, body) => {
+      const current = get(id)
+      const patch: { items?: ReturnType<typeof resolveItems>; fulfillment?: Fulfillment | null } = {}
 
-    const current = get(id)
-    const patch: { items?: ReturnType<typeof resolveItems>; fulfillment?: Fulfillment | null } = {}
+      if (body.items !== undefined) patch.items = resolveItems(body.items)
+      if (body.fulfillment !== undefined) {
+        patch.fulfillment = isCompleteFulfillment(body.fulfillment as Fulfillment)
+          ? (body.fulfillment as Fulfillment)
+          : null
+      }
 
-    if (body.items !== undefined) patch.items = resolveItems(body.items)
-    if (body.fulfillment !== undefined) {
-      patch.fulfillment = isCompleteFulfillment(body.fulfillment) ? body.fulfillment : null
-    }
-
-    // Any mutation invalidates an outstanding quote; it must be re-issued.
-    const session = update(id, current.version, { ...patch, quoteId: null })
-
-    append({
-      sessionId: id,
-      actor: agentId ?? 'anonymous_agent',
-      action: 'session.update',
-      decision: 'allow',
-      detail: { patch: Object.keys(patch), status: session.status, totals: session.totals },
-    })
-
-    return Response.json(serialize(session), { headers: { 'Request-Id': reqId } })
-  } catch (err) {
-    append({
-      sessionId: id,
-      actor: agentId ?? 'anonymous_agent',
-      action: 'session.update',
-      decision: 'refuse',
-      reason: err instanceof ApiError ? err.code : 'internal_error',
-      detail: { message: (err as Error).message },
-    })
-    return errorResponse(err, reqId)
-  }
+      // Any mutation invalidates an outstanding quote; it must be re-issued.
+      const session = update(id, current.version, { ...patch, quoteId: null })
+      return { status: 200, body: serialize(session) }
+    },
+  })
 }

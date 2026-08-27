@@ -57,3 +57,17 @@ Shell pipelines of `curl | node -e` broke on Windows path handling (`/tmp` resol
 and made empty-variable bugs surface as confusing 308 redirects. Replaced with
 `scripts/smoke.ts` using `fetch`, which is cross-platform and reusable as the basis for the
 buyer harness.
+
+## 2026-08-29
+
+**Top-level `await` rejected in a script with no imports.**
+`next build` failed with `TS1375: 'await' expressions are only allowed at the top level of a
+file when that file is a module`. `scripts/smoke.ts` used `fetch` and had no imports, so
+TypeScript treated it as a global script rather than a module. Resolved naturally when the
+script began importing the signed client; the alternative was an empty `export {}`.
+
+**Idempotency needed a claim-before-work insert, not a check-then-write.**
+An initial read-then-insert left a window where two concurrent requests with the same key both
+saw "no existing record" and both proceeded. The insert itself is now the lock: the row is
+written with a null response before any work happens, so the second caller finds a claim in
+flight and is refused.
