@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "node --no-warnings=ExperimentalWarning scripts/seed.ts"
+    "seed": "node --no-warnings=ExperimentalWarning scripts/seed.ts",
+    "test": "node --no-warnings=ExperimentalWarning --test \"tests/*.test.ts\"",
+    "smoke": "node --no-warnings=ExperimentalWarning scripts/smoke.ts"
   },
   "dependencies": {
     "next": "16.3.3",

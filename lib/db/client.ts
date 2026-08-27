@@ -15,6 +15,12 @@ export function db(): DatabaseSync {
   return handle
 }
 
+export function close(): void {
+  if (!g.__mandiDb) return
+  g.__mandiDb.close()
+  g.__mandiDb = undefined
+}
+
 export function tx<T>(fn: () => T): T {
   const handle = db()
   handle.exec('BEGIN IMMEDIATE')
