@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build and typecheck
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Seed the merchant
+        run: npm run seed
+
+      - name: Start the merchant
+        run: |
+          npm start &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3000/api/catalog >/dev/null && exit 0
+            sleep 1
+          done
+          echo "server did not come up" && exit 1
+
+      - name: Protocol smoke test
+        run: npm run smoke
+
+      - name: Adversarial suite
+        run: npm run attacks
