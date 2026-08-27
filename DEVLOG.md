@@ -292,3 +292,18 @@ instruction; the link is a convenience for a human to pay it, and its cap is a l
 ergonomics rather than on whether the provider accepted the instruction. A refused link now
 leaves the order standing and its id becomes the reference. This also removed the earlier
 link-failure classification, which had been reasoning about the wrong object.
+
+## 2026-09-09
+
+**Made the refusals something a visitor can trigger rather than read about.**
+`POST /api/try` runs a real attack against the live gate and returns whatever it actually says,
+so the landing page offers five of the eight as buttons. Nothing is recorded or replayed.
+
+Three of the eight are deliberately not offered. Replaying a spent mandate, using an expired
+one, and racing two completions all need a completed purchase first, and each of those consumes
+one of Razorpay's thirty test-mode payment links — an endpoint anyone can press would exhaust
+the account's allowance within a day. The page says which three are missing and why rather than
+quietly showing five and implying that is all of them.
+
+The endpoint is throttled per caller and capped globally, since it creates checkout sessions on
+demand, and it restores the catalogue price in a `finally` because the drift attack moves one.

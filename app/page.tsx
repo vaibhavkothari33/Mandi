@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { Coins } from './coins'
+import { TryIt, type OfferedAttack } from './try-it'
+import { ATTACKS } from '@/harness/attacks'
 import { verifyChain } from '@/lib/audit'
 import { db } from '@/lib/db/client'
 import { WEB_BUYER } from '@/lib/human'
@@ -45,6 +47,11 @@ export default async function Home() {
 
   const agentShare = merchant.agent_share_bps / 100
   const held = attacks.held ?? 0
+
+  // Mirrors the set the /api/try route will accept.
+  const offered: OfferedAttack[] = ATTACKS.filter((a) => [1, 3, 5, 6, 7].includes(a.id)).map(
+    (a) => ({ id: a.id, name: a.name, premise: a.premise, expected: a.expected }),
+  )
 
   return (
     <main>
@@ -253,8 +260,31 @@ export default async function Home() {
         </div>
       </section>
 
+      <section className="border-y border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40">
+        <div className="max-w-5xl mx-auto px-6 py-16">
+          <h2 className="text-2xl font-medium tracking-tight">Try to break it</h2>
+          <p className="mt-2 text-neutral-600 dark:text-neutral-400 max-w-2xl text-pretty">
+            These are not recordings. Each button runs a real attack against the merchant you are
+            looking at, right now, and prints whatever the gate actually says back.
+          </p>
+
+          <div className="mt-8">
+            <TryIt attacks={offered} />
+          </div>
+
+          <p className="mt-6 text-sm text-neutral-500">
+            Three more run only in the suite, because they need a completed purchase first:
+            replaying a spent mandate, using an expired one, and racing two payments at once.{' '}
+            <Link href="/attacks" className="underline">
+              See all eight
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+
       {recent.length > 0 && (
-        <section className="max-w-5xl mx-auto px-6 pb-20">
+        <section className="max-w-5xl mx-auto px-6 py-20">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-medium text-neutral-500 uppercase tracking-wide">
               Recent orders

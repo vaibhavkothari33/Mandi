@@ -49,6 +49,7 @@ Open <http://localhost:3000>. Three views worth a look:
 
 | Page | What it shows |
 |---|---|
+| `/` | The landing page — five attacks a visitor can run against the live gate themselves |
 | `/shop` | The storefront, buying as a person |
 | `/merchant` | The shopkeeper's side — revenue, and how much of it came from agents |
 | `/sessions/[id]` | Every decision behind one order, human or agent |
