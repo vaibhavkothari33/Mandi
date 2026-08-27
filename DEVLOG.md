@@ -126,3 +126,20 @@ Test mode has no payer, so no `payment.captured` event can occur without a human
 The executor creates a real order and a real UPI payment link and reports success on that
 basis, and the signed webhook route handles the capture transition for a live flow. Recorded
 here and in the README rather than presented as a completed charge.
+
+## 2026-09-02
+
+**MCP tool calls are not serialised, and a naive probe raced itself.**
+A first test piped several `tools/call` requests into the server at once and read the replies
+in arrival order. `request_approval` answered before `get_quote`, so approval was requested
+against a session that had no quote yet and the probe reported a failure that did not exist.
+The server was correct: JSON-RPC ids exist precisely because responses may arrive out of
+order. Replaced the probe with `scripts/mcp-demo.ts`, which correlates replies by id and
+awaits each call the way a real client does.
+
+**Deciding where consent could not live.**
+An earlier sketch gave the MCP server a tool that signed a cart mandate. That is convenient
+and wrong: it would let the agent manufacture its own authorisation, which is the exact
+property the gate exists to prevent. Mandate signing moved to `lib/wallet.ts`, reachable only
+from the approval CLI. The agent's tool list now has no way to create consent, only to
+request it and to spend one a human already granted.

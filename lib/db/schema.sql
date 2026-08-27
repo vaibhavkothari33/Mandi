@@ -71,6 +71,23 @@ CREATE TABLE IF NOT EXISTS mandates (
 
 CREATE INDEX IF NOT EXISTS mandates_by_intent ON mandates(intent_id);
 
+-- A buyer-side approval request. The agent may create one; only a human may
+-- decide it. Nothing here is reachable from the merchant API.
+CREATE TABLE IF NOT EXISTS approvals (
+  id           TEXT PRIMARY KEY,
+  session_id   TEXT    NOT NULL REFERENCES checkout_sessions(id),
+  quote_id     TEXT    NOT NULL,
+  agent_id     TEXT    NOT NULL,
+  subject      TEXT    NOT NULL,
+  amount_paise INTEGER NOT NULL,
+  summary      TEXT    NOT NULL,
+  status       TEXT    NOT NULL CHECK (status IN ('pending','approved','denied')),
+  intent_jws   TEXT,
+  cart_jws     TEXT,
+  created_at   TEXT    NOT NULL,
+  decided_at   TEXT
+);
+
 CREATE TABLE IF NOT EXISTS idempotency_keys (
   key             TEXT PRIMARY KEY,
   endpoint        TEXT    NOT NULL,

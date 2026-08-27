@@ -9,12 +9,18 @@
     "lint": "eslint",
     "seed": "node --no-warnings=ExperimentalWarning scripts/seed.ts",
     "test": "node --no-warnings=ExperimentalWarning --test \"tests/*.test.ts\"",
-    "smoke": "node --no-warnings=ExperimentalWarning scripts/smoke.ts"
+    "smoke": "node --no-warnings=ExperimentalWarning scripts/smoke.ts",
+    "approve": "node --no-warnings=ExperimentalWarning scripts/approve.ts",
+    "buyer": "node --no-warnings=ExperimentalWarning harness/buyer.ts",
+    "mcp": "node --no-warnings=ExperimentalWarning mcp/server.ts",
+    "mcp:demo": "node --no-warnings=ExperimentalWarning scripts/mcp-demo.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "next": "16.3.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
