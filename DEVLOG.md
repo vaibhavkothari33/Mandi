@@ -257,3 +257,15 @@ The confusing part was that `/api/merchant/stats` returned the same data correct
 time — `JSON.stringify` does not care about prototypes, only the prop boundary does. Rows that
 leave the stats function are now copied into plain objects, and a test asserts it by checking
 `Object.getPrototypeOf` on everything that crosses the boundary, so this cannot regress quietly.
+
+## 2026-09-07
+
+**Checkout creation was never attributed to the checkout it created.**
+Rewriting the order page to be readable made the gap obvious: agent orders had no "Checkout
+opened" entry in their timeline, while browser orders did. `handleMutation` audits against a
+session id supplied by the caller, and on creation there is no id yet — so `session.create` was
+recorded with a null session and never appeared on its own order. The browser route did not have
+the problem only because it appends its own entry directly.
+
+Handlers can now return the id they created, and the audit record prefers it. The first event of
+every order is finally filed against that order, whoever placed it.

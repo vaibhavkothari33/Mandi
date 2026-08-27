@@ -16,7 +16,7 @@ export async function POST(request: Request) {
         : null
 
       const session = create({ agentId: auth.agentId, items, fulfillment })
-      return { status: 201, body: serialize(session) }
+      return { status: 201, body: serialize(session), sessionId: session.id }
     },
   })
 }

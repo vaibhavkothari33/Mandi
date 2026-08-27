@@ -6,6 +6,8 @@ import { claim, fingerprint, record, release } from './idempotency.ts'
 export interface MutationResult {
   status: number
   body: unknown
+  /** Set by handlers that create the session, which cannot be named in advance. */
+  sessionId?: string
 }
 
 /**
@@ -98,7 +100,7 @@ export async function handleMutation(opts: {
     const error = (result.body as { error?: { code?: string } } | null)?.error
 
     append({
-      sessionId: opts.sessionId ?? null,
+      sessionId: result.sessionId ?? opts.sessionId ?? null,
       actor: auth.agentId,
       action,
       decision: refused ? 'refuse' : 'allow',
