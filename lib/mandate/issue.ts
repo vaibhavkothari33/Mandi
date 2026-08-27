@@ -54,6 +54,7 @@ export function issueCart(opts: {
   agent: string
   intentJti: string
   sessionId: string
+  quoteId: string
   cartHash: string
   amountPaise: Paise
   currency?: string
@@ -69,6 +70,7 @@ export function issueCart(opts: {
     agent: opts.agent,
     intent_jti: opts.intentJti,
     session_id: opts.sessionId,
+    quote_id: opts.quoteId,
     cart_hash: opts.cartHash,
     amount_paise: opts.amountPaise,
     currency: opts.currency ?? MERCHANT.currency,

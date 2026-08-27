@@ -3,6 +3,7 @@ import { cartHash, getProduct } from './catalog.ts'
 import { db } from './db/client.ts'
 import { formatInr } from './money.ts'
 import { checkCartWithinIntent } from './mandate/scope.ts'
+import { detectDrift, find as findQuote, isExpired, secondsRemaining } from './quote.ts'
 import { consume, drawdown, usageCount } from './mandate/store.ts'
 import type { CartPayload, IntentPayload } from './mandate/types.ts'
 import { verifyCart, verifyIntent } from './mandate/verify.ts'
@@ -92,6 +93,25 @@ export function evaluate(request: GateRequest): GateDecision {
   }
   pass('cart_bound_to_session')
 
+  if (cart.quote_id !== session.quoteId) {
+    return fail(
+      'quote_current',
+      'quote_superseded',
+      'the quote this mandate approved is no longer the active quote for this session',
+    )
+  }
+
+  const quote = findQuote(cart.quote_id)
+  if (!quote) return fail('quote_current', 'quote_not_found', `no such quote: ${cart.quote_id}`)
+  if (isExpired(quote)) {
+    return fail(
+      'quote_current',
+      'quote_expired',
+      'the approved quote has expired; request a fresh quote and re-approve',
+    )
+  }
+  pass('quote_current', `${secondsRemaining(quote)}s remaining`)
+
   const currentHash = cartHash(session.items, cart.currency)
   if (currentHash !== cart.cart_hash) {
     return fail(
@@ -101,6 +121,17 @@ export function evaluate(request: GateRequest): GateDecision {
     )
   }
   pass('cart_unchanged', currentHash.slice(0, 16))
+
+  const drift = detectDrift(session.items)
+  if (drift.length > 0) {
+    const first = drift[0]
+    return fail(
+      'price_unchanged',
+      'quote_price_drift',
+      `${first.product_id} ${first.reason.replace('_', ' ')} since approval; a fresh quote and cart mandate are required`,
+    )
+  }
+  pass('price_unchanged')
 
   if (cart.amount_paise !== session.totals.total_paise) {
     return fail(

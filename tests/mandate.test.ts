@@ -26,6 +26,7 @@ const newCart = (intentJti: string, amount = 25000, overrides: Record<string, un
     agent: AGENT,
     intentJti,
     sessionId: 'cs_test',
+    quoteId: 'qt_test',
     cartHash: 'hash_abc',
     amountPaise: amount,
     ...overrides,

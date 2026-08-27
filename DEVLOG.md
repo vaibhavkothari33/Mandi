@@ -106,3 +106,23 @@ so the early-exit ordering is itself covered.
 A `FixedExecutor` class used `constructor(private readonly result)` and hit the same
 `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` as `ApiError` on day 3. Replaced with a factory returning
 an object literal.
+
+## 2026-09-01
+
+**Type stripping let a breaking signature change through the test suite.**
+Adding `quote_id` to cart mandates made two older test fixtures structurally invalid, but all
+77 tests still passed: Node strips types without checking them, so a missing required property
+is invisible at runtime. Only `next build` caught it. The test command proves behaviour and the
+build proves types; neither alone is sufficient, and both now run before every commit.
+
+**Cart tampering became unreachable over HTTP, in a good way.**
+The smoke test asserted `cart_hash_mismatch` when an agent enlarges an approved cart, and began
+failing with `quote_superseded`. Mutating a session invalidates its quote, so the quote check
+now refuses first. Both barriers are real and independent; the assertion was updated to match
+the actual order, and the hash check is still exercised directly in the gate tests.
+
+**Razorpay test mode cannot produce a capture.**
+Test mode has no payer, so no `payment.captured` event can occur without a human paying a link.
+The executor creates a real order and a real UPI payment link and reports success on that
+basis, and the signed webhook route handles the capture transition for a live flow. Recorded
+here and in the README rather than presented as a completed charge.

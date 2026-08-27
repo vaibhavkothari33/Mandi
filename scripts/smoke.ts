@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ADDRESS, AgentClient } from '../harness/client.ts'
-import { cartHash } from '../lib/catalog.ts'
+import { cartHash, setPrice } from '../lib/catalog.ts'
 import { issueCart, issueIntent } from '../lib/mandate/issue.ts'
 
 const client = new AgentClient()
@@ -82,6 +82,11 @@ const items = created.json.line_items.map((l: any) => ({
   unit_price_paise: l.unit_price_paise,
 }))
 
+const quote = await client.post(`/api/checkout_sessions/${id}/quote`, {})
+check('quote issued', quote.status === 201, quote.json)
+check('quote carries a deadline', typeof quote.json?.expires_at === 'string')
+check('quote expires within the advertised ttl', quote.json?.expires_in_seconds <= 120, quote.json?.expires_in_seconds)
+
 const intent = issueIntent({
   subject: 'user_demo',
   agent: client.agentId,
@@ -93,6 +98,7 @@ const cart = issueCart({
   agent: client.agentId,
   intentJti: intent.payload.jti,
   sessionId: id,
+  quoteId: quote.json.id,
   cartHash: cartHash(items),
   amountPaise: addressed.json.totals.total_paise,
 })
@@ -112,12 +118,14 @@ const swapSession = await client.post('/api/checkout_sessions', {
   fulfillment: ADDRESS,
 })
 const swapId = swapSession.json.id
+const swapQuote = await client.post(`/api/checkout_sessions/${swapId}/quote`, {})
 const swapIntent = issueIntent({ subject: 'user_demo', agent: client.agentId, scope: { max_amount_paise: 100000 } })
 const swapCart = issueCart({
   subject: 'user_demo',
   agent: client.agentId,
   intentJti: swapIntent.payload.jti,
   sessionId: swapId,
+  quoteId: swapQuote.json.id,
   cartHash: cartHash([{ product_id: 'sku_chai_250', quantity: 1, unit_price_paise: 24900 }]),
   amountPaise: swapSession.json.totals.total_paise,
 })
@@ -128,8 +136,40 @@ const swapped = await client.post(`/api/checkout_sessions/${swapId}/complete`, {
   intent_mandate: swapIntent.jws,
   cart_mandate: swapCart.jws,
 })
-check('cart swap refused', swapped.json?.error?.code === 'cart_hash_mismatch', swapped.json?.error)
-check('refusal lists the failed check', swapped.json?.checks?.some((c: any) => c.name === 'cart_unchanged' && !c.passed) === true)
+// Two independent barriers stop this. Mutating a session invalidates its quote,
+// so `quote_superseded` fires first over HTTP; the cart-hash check behind it is
+// exercised directly in tests/gate.test.ts.
+check('cart swap refused', swapped.json?.error?.code === 'quote_superseded', swapped.json?.error)
+check('refusal lists the failed check', swapped.json?.checks?.some((c: any) => c.name === 'quote_current' && !c.passed) === true)
+
+console.log('gate: the price moves after approval')
+const driftSession = await client.post('/api/checkout_sessions', {
+  items: [{ product_id: 'sku_honey_500', quantity: 1 }],
+  fulfillment: ADDRESS,
+})
+const driftId = driftSession.json.id
+const driftQuote = await client.post(`/api/checkout_sessions/${driftId}/quote`, {})
+const driftIntent = issueIntent({ subject: 'user_demo', agent: client.agentId, scope: { max_amount_paise: 500000 } })
+const driftCart = issueCart({
+  subject: 'user_demo',
+  agent: client.agentId,
+  intentJti: driftIntent.payload.jti,
+  sessionId: driftId,
+  quoteId: driftQuote.json.id,
+  cartHash: cartHash([{ product_id: 'sku_honey_500', quantity: 1, unit_price_paise: 47500 }]),
+  amountPaise: driftSession.json.totals.total_paise,
+})
+
+// The merchant reprices while the human is still deciding.
+setPrice('sku_honey_500', 52500)
+
+const drifted = await client.post(`/api/checkout_sessions/${driftId}/complete`, {
+  intent_mandate: driftIntent.jws,
+  cart_mandate: driftCart.jws,
+})
+check('price drift refused', drifted.json?.error?.code === 'quote_price_drift', drifted.json?.error)
+check('the cart itself was unchanged', drifted.json?.checks?.some((c: any) => c.name === 'cart_unchanged' && c.passed) === true)
+setPrice('sku_honey_500', 47500)
 
 console.log('terminal states')
 const doomed = await client.post('/api/checkout_sessions', {

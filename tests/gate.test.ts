@@ -11,6 +11,7 @@ const { issueCart, issueIntent } = await import('../lib/mandate/issue.ts')
 const store = await import('../lib/session/store.ts')
 const mandates = await import('../lib/mandate/store.ts')
 const payments = await import('../lib/pay/store.ts')
+const quotes = await import('../lib/quote.ts')
 const { StubExecutor } = await import('../lib/pay/executor.ts')
 import type { PaymentExecutor, PaymentResult } from '../lib/pay/executor.ts'
 
@@ -60,7 +61,10 @@ function scenario(
   } = {},
 ) {
   const items = store.resolveItems(opts.items ?? [{ product_id: 'sku_chai', quantity: 1 }])
-  const session = store.create({ agentId: AGENT, items, fulfillment: ADDRESS })
+  const created = store.create({ agentId: AGENT, items, fulfillment: ADDRESS })
+
+  const quote = quotes.issue(created)
+  const session = store.update(created.id, created.version, { quoteId: quote.id })
 
   const intent = issueIntent({
     subject: SUBJECT,
@@ -77,12 +81,13 @@ function scenario(
     agent: AGENT,
     intentJti: intent.payload.jti,
     sessionId: session.id,
+    quoteId: quote.id,
     cartHash: cartHash(session.items),
     amountPaise: session.totals.total_paise,
     ttlSeconds: opts.cartTtl,
   })
 
-  return { session, intent, cart }
+  return { session, intent, cart, quote }
 }
 
 const request = (s: ReturnType<typeof scenario>, overrides: Record<string, unknown> = {}) => ({
@@ -111,7 +116,9 @@ test('a well-formed purchase is authorized and every check passes', async () => 
       'cart_mandate_valid',
       'agent_matches_caller',
       'cart_bound_to_session',
+      'quote_current',
       'cart_unchanged',
+      'price_unchanged',
       'amount_matches_total',
       'within_intent_scope',
     ],
@@ -148,6 +155,7 @@ test('a mandate approving a different amount is refused', () => {
     agent: AGENT,
     intentJti: s.intent.payload.jti,
     sessionId: s.session.id,
+    quoteId: s.quote.id,
     cartHash: cartHash(s.session.items),
     amountPaise: 1,
   })
@@ -253,12 +261,16 @@ test('drawdown accumulates across purchases on one intent', async () => {
   })
 
   const buy = async () => {
-    const session = store.create({ agentId: AGENT, items, fulfillment: ADDRESS })
+    const created = store.create({ agentId: AGENT, items, fulfillment: ADDRESS })
+    const quote = quotes.issue(created)
+    const session = store.update(created.id, created.version, { quoteId: quote.id })
+
     const cart = issueCart({
       subject: SUBJECT,
       agent: AGENT,
       intentJti: intent.payload.jti,
       sessionId: session.id,
+      quoteId: quote.id,
       cartHash: cartHash(session.items),
       amountPaise: session.totals.total_paise,
     })

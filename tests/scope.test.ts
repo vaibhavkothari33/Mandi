@@ -30,6 +30,7 @@ const cart = (overrides: Partial<CartPayload> = {}): CartPayload => ({
   agent: 'agent_demo_buyer',
   intent_jti: 'mdt_intent',
   session_id: 'cs_1',
+  quote_id: 'qt_1',
   cart_hash: 'hash_abc',
   amount_paise: 25000,
   currency: 'INR',

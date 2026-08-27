@@ -26,6 +26,7 @@ export interface CartPayload {
   agent: string
   intent_jti: string
   session_id: string
+  quote_id: string
   cart_hash: string
   amount_paise: Paise
   currency: string
