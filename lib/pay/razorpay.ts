@@ -30,13 +30,18 @@ export class RazorpayExecutor implements PaymentExecutor {
   /**
    * Creates a real test-mode order and a payment link for it.
    *
-   * Test mode has no payer, so no capture event can occur here. `succeeded`
-   * therefore means the provider accepted the instruction and issued real
-   * identifiers; the webhook route is what moves a payment to captured in a
-   * live flow. The README states this limitation explicitly.
+   * The order is the payment instruction and the artifact that matters. The
+   * payment link is a convenience for a human to pay it, and test mode caps
+   * those at thirty per account — a limit on demo ergonomics, not on whether
+   * the instruction was accepted. So a refused link no longer fails the
+   * payment; the order stands and its id becomes the reference.
    *
-   * UPI payment links are rejected by Razorpay in test mode, so a standard
-   * link is used; the UPI rail is a live-mode concern.
+   * Test mode has no payer, so no capture event can occur here. `succeeded`
+   * means the provider accepted the instruction and issued real identifiers;
+   * the webhook route is what moves a payment to captured in a live flow.
+   *
+   * UPI payment links are rejected outright in test mode, so a standard link
+   * is used; the UPI rail is a live-mode concern.
    */
   async execute(intent: PaymentIntent): Promise<PaymentResult> {
     let order: { id: string }
@@ -87,24 +92,18 @@ export class RazorpayExecutor implements PaymentExecutor {
         `${intent.idempotencyKey}:link`,
       )
 
-      if (response.status >= 500) {
-        return this.indeterminate(order.id, `provider returned ${response.status} creating the link`)
-      }
-
-      const payload = (await response.json()) as {
+      const payload = (await response.json().catch(() => ({}))) as {
         id?: string
         short_url?: string
         error?: { description?: string }
       }
 
       if (!response.ok || !payload.id) {
-        // The provider answered definitively: no link exists, so nothing can be
-        // charged against it. Safe to release rather than hold for reconciliation.
         return {
-          outcome: 'failed',
-          reference: null,
+          outcome: 'succeeded',
+          reference: order.id,
           providerOrderId: order.id,
-          message: payload.error?.description ?? `link rejected with ${response.status}`,
+          message: `order created; no payment link (${payload.error?.description ?? response.status})`,
         }
       }
 
@@ -114,8 +113,15 @@ export class RazorpayExecutor implements PaymentExecutor {
         providerOrderId: order.id,
         message: payload.short_url ?? 'payment link created',
       }
-    } catch (err) {
-      return this.indeterminate(order.id, (err as Error).message)
+    } catch {
+      // The order is already placed; a link that could not be created does not
+      // undo it, and no money can move either way in test mode.
+      return {
+        outcome: 'succeeded',
+        reference: order.id,
+        providerOrderId: order.id,
+        message: 'order created; payment link unavailable',
+      }
     }
   }
 

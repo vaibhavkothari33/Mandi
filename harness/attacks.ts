@@ -10,6 +10,12 @@ export interface AttackOutcome {
   refused: boolean
   code: string
   detail: string
+  /**
+   * The attack never got far enough to be judged. Reported separately because
+   * a suite that cannot set itself up has proved nothing, and calling that a
+   * breach cries wolf on the one signal that must stay trustworthy.
+   */
+  setupFailed?: boolean
 }
 
 export interface Attack {
@@ -49,6 +55,34 @@ const complete = (client: AgentClient, id: string, intent: string | null, cart: 
     cart_mandate: cart,
   })
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Some attacks need a completed purchase before they can begin. Against real
+ * Razorpay test keys that step can be throttled, which is a property of the
+ * provider rather than of the gate, so it is retried before giving up.
+ */
+async function completeForSetup(
+  client: AgentClient,
+  id: string,
+  intent: string | null,
+  cart: string | null,
+): Promise<{ ok: boolean; detail: string }> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const reply = await complete(client, id, intent, cart)
+    if (reply.status === 200) return { ok: true, detail: '' }
+
+    const code = reply.json?.error?.code ?? `http_${reply.status}`
+    const transient = code === 'payment_failed' || code === 'payment_indeterminate'
+    if (!transient) return { ok: false, detail: code }
+
+    if (attempt < 2) await sleep(1500 * (attempt + 1))
+    else return { ok: false, detail: `${code}: ${reply.json?.error?.message ?? ''}`.trim() }
+  }
+
+  return { ok: false, detail: 'unreachable' }
+}
+
 const outcome = (reply: { status: number; json: any }): AttackOutcome => ({
   refused: reply.status !== 200,
   code: reply.json?.error?.code ?? (reply.status === 200 ? 'ALLOWED' : `http_${reply.status}`),
@@ -73,9 +107,9 @@ export const ATTACKS: Attack[] = [
     expected: 'mandate_already_used',
     run: async (client) => {
       const s = await approved(client)
-      const first = await complete(client, s.id, s.approval.intent_jws, s.approval.cart_jws)
-      if (first.status !== 200) {
-        return { refused: true, code: 'setup_failed', detail: first.json?.error?.code ?? '' }
+      const first = await completeForSetup(client, s.id, s.approval.intent_jws, s.approval.cart_jws)
+      if (!first.ok) {
+        return { refused: false, setupFailed: true, code: 'setup_failed', detail: first.detail }
       }
 
       // A fresh session, but the old mandate replayed against it.
@@ -189,12 +223,24 @@ export const ATTACKS: Attack[] = [
       const succeeded = [a, b].filter((r) => r.status === 200).length
       const live = paymentsForSession(s.id).filter((p) => p.status !== 'failed').length
       const loser = [a, b].find((r) => r.status !== 200)
+      const detail = `${succeeded} of 2 completed, ${live} live payment(s)`
 
-      return {
-        refused: succeeded === 1 && live === 1,
-        code: succeeded === 1 && live === 1 ? (loser?.json?.error?.code ?? 'refused') : 'DOUBLE_CHARGE',
-        detail: `${succeeded} of 2 completed, ${live} live payment(s)`,
+      // Only more than one is a breach. Zero means neither request got through,
+      // which says nothing about the race and must not be reported as a charge.
+      if (succeeded > 1 || live > 1) {
+        return { refused: false, code: 'DOUBLE_CHARGE', detail }
       }
+
+      if (succeeded === 0) {
+        return {
+          refused: false,
+          setupFailed: true,
+          code: 'setup_failed',
+          detail: `${detail}; neither completion succeeded (${loser?.json?.error?.code ?? 'unknown'})`,
+        }
+      }
+
+      return { refused: true, code: loser?.json?.error?.code ?? 'refused', detail }
     },
   },
 ]

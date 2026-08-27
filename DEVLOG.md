@@ -269,3 +269,26 @@ the problem only because it appends its own entry directly.
 
 Handlers can now return the id they created, and the audit record prefers it. The first event of
 every order is finally filed against that order, whoever placed it.
+
+## 2026-09-08
+
+**The security suite reported a double charge that had not happened.**
+`npm run attacks` printed `BREACH — DOUBLE_CHARGE` on the concurrency attack. No session had
+more than one live payment and the unique index was intact: the suite was wrong, not the gate.
+
+Attack 8 asserted `succeeded === 1 && live === 1` and labelled every other result
+`DOUBLE_CHARGE`. That treats *zero* completions — a setup failure — as the most alarming
+outcome the suite can report. A security test that cries wolf destroys the value of the one
+signal that has to stay trustworthy, so outcomes now separate three cases: refused, breached,
+and could-not-be-set-up. Only more than one completion is a breach; a run that proves nothing
+says so and still exits non-zero.
+
+**The cause was a Razorpay limit, and it exposed a design mistake.**
+Behind the false alarm: `test mode limit of 30 reached for payment_link`. Test-mode payment
+links are capped per account, and a day of testing had exhausted them.
+
+The deeper error was treating the payment *link* as the payment instrument. The **order** is the
+instruction; the link is a convenience for a human to pay it, and its cap is a limit on demo
+ergonomics rather than on whether the provider accepted the instruction. A refused link now
+leaves the order standing and its id becomes the reference. This also removed the earlier
+link-failure classification, which had been reasoning about the wrong object.

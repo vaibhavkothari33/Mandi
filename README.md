@@ -235,7 +235,8 @@ Stated plainly, because a payments panel will ask.
 | Checkout endpoints | **Shaped by** the ACP spec — the five session endpoints and its status model. Not a conformance claim |
 | Mandate chain | **Inspired by** AP2 — signed JWS, not the full W3C Verifiable Credentials stack |
 | UPI Reserve Pay | **Modelled**, not integrated. Drawdown behaves like a reserve; the NPCI rail is not available in test mode |
-| Razorpay orders and payment links | **Real** test-mode API calls with real identifiers |
+| Razorpay orders | **Real** test-mode API calls with real `order_…` identifiers |
+| Razorpay payment links | Best-effort. Test mode caps them at thirty per account, so a refused link leaves the order standing rather than failing the payment |
 | Payment capture | **Not real.** Test mode has no payer, so no capture event can occur. `succeeded` means the provider accepted the instruction. The signed webhook route handles the capture transition for a live flow |
 | Catalogue | Seeded, not a real merchant's inventory |
 | Mandate private key | Held locally, because Mandi also plays the issuer for the demo. In production it belongs to the buyer's wallet — the merchant path only ever reads the public half |
