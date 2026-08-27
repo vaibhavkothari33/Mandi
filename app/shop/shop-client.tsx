@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { addLine, formatInr, readCart, writeCart, type CartLine } from './cart'
+import { ProductArt } from './product-art'
 
 export interface ShopProduct {
   id: string
@@ -60,8 +61,24 @@ export function ShopClient({ products }: { products: ShopProduct[] }) {
                 return (
                   <div
                     key={product.id}
-                    className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-5 flex flex-col"
+                    className="rounded-lg border border-neutral-200 dark:border-neutral-800 overflow-hidden flex flex-col"
                   >
+                    <div className="relative">
+                      <ProductArt
+                        productId={product.id}
+                        category={product.category}
+                        className="w-full h-40 object-cover"
+                      />
+                      {soldOut && (
+                        <div className="absolute inset-0 bg-white/70 dark:bg-neutral-950/70 grid place-items-center">
+                          <span className="text-xs uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                            sold out
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-5 flex flex-col flex-1">
                     <div className="font-medium">{product.title}</div>
                     <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400 flex-1">
                       {product.description}
@@ -71,7 +88,7 @@ export function ShopClient({ products }: { products: ShopProduct[] }) {
                       <span className="tabular-nums">{formatInr(product.price_paise)}</span>
 
                       {soldOut ? (
-                        <span className="text-xs text-neutral-500">sold out</span>
+                        <span className="text-xs text-neutral-500">unavailable</span>
                       ) : inCart === 0 ? (
                         <button
                           onClick={() => update(product.id, 1)}
@@ -99,6 +116,7 @@ export function ShopClient({ products }: { products: ShopProduct[] }) {
                           </button>
                         </div>
                       )}
+                    </div>
                     </div>
                   </div>
                 )

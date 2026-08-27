@@ -8,6 +8,7 @@ export default async function CheckoutPage() {
   const products = listProducts().map((p) => ({
     id: p.id,
     title: p.title,
+    category: p.category,
     price_paise: p.price_paise,
   }))
 

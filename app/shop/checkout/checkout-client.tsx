@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { clearCart, formatInr, readCart, type CartLine } from '../cart'
+import { ProductArt } from '../product-art'
 
 interface Product {
   id: string
   title: string
+  category: string
   price_paise: number
 }
 
@@ -184,6 +186,11 @@ export function CheckoutClient({ products }: { products: Product[] }) {
             const product = byId.get(line.product_id)
             return (
               <li key={line.product_id} className="py-3 flex items-center gap-4">
+                <ProductArt
+                  productId={line.product_id}
+                  category={product?.category ?? 'grocery'}
+                  className="w-12 h-12 rounded-md shrink-0"
+                />
                 <span className="flex-1">{product?.title ?? line.product_id}</span>
                 <span className="text-sm text-neutral-500 tabular-nums">× {line.quantity}</span>
                 <span className="tabular-nums w-24 text-right">

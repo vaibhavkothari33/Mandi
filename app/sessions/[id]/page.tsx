@@ -6,6 +6,7 @@ import { WEB_BUYER } from '@/lib/human'
 import { formatInr } from '@/lib/money'
 import { forSession as paymentsForSession } from '@/lib/pay/store'
 import { get as getSession } from '@/lib/session/store'
+import { ProductArt } from '@/app/shop/product-art'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,6 +106,11 @@ export default async function SessionPage({ params }: PageProps<'/sessions/[id]'
             const product = getProduct(item.product_id)
             return (
               <li key={item.product_id} className="px-5 py-3 flex items-center gap-4">
+                <ProductArt
+                  productId={item.product_id}
+                  category={product?.category ?? 'grocery'}
+                  className="w-12 h-12 rounded-md shrink-0"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm">{product?.title ?? item.product_id}</div>
                   <div className="text-xs text-neutral-500 mt-0.5">
