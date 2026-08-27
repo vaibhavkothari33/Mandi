@@ -293,6 +293,10 @@ export async function authorize(
     }
   }
 
+  // Reconciliation needs the provider's handle precisely when the outcome is
+  // unknown, so persist whatever identifiers came back before holding.
+  settle(payment.id, 'pending', { providerOrderId: result.providerOrderId })
+
   append({
     sessionId: session.id,
     actor: request.callerAgentId,
@@ -301,6 +305,7 @@ export async function authorize(
     reason: 'payment_indeterminate',
     detail: {
       payment: payment.id,
+      provider_order_id: result.providerOrderId,
       message: result.message,
       mandate_released: false,
       requires_reconciliation: true,

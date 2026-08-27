@@ -28,12 +28,15 @@ export class RazorpayExecutor implements PaymentExecutor {
   }
 
   /**
-   * Creates a real test-mode order and a UPI payment link for it.
+   * Creates a real test-mode order and a payment link for it.
    *
    * Test mode has no payer, so no capture event can occur here. `succeeded`
    * therefore means the provider accepted the instruction and issued real
    * identifiers; the webhook route is what moves a payment to captured in a
    * live flow. The README states this limitation explicitly.
+   *
+   * UPI payment links are rejected by Razorpay in test mode, so a standard
+   * link is used; the UPI rail is a live-mode concern.
    */
   async execute(intent: PaymentIntent): Promise<PaymentResult> {
     let order: { id: string }
@@ -80,10 +83,13 @@ export class RazorpayExecutor implements PaymentExecutor {
           description: intent.description,
           reference_id: `${intent.sessionId}:${intent.idempotencyKey.slice(0, 8)}`,
           notify: { sms: false, email: false },
-          upi_link: true,
         },
         `${intent.idempotencyKey}:link`,
       )
+
+      if (response.status >= 500) {
+        return this.indeterminate(order.id, `provider returned ${response.status} creating the link`)
+      }
 
       const payload = (await response.json()) as {
         id?: string
@@ -92,7 +98,14 @@ export class RazorpayExecutor implements PaymentExecutor {
       }
 
       if (!response.ok || !payload.id) {
-        return this.indeterminate(order.id, payload.error?.description ?? `link rejected with ${response.status}`)
+        // The provider answered definitively: no link exists, so nothing can be
+        // charged against it. Safe to release rather than hold for reconciliation.
+        return {
+          outcome: 'failed',
+          reference: null,
+          providerOrderId: order.id,
+          message: payload.error?.description ?? `link rejected with ${response.status}`,
+        }
       }
 
       return {

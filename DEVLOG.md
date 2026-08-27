@@ -159,3 +159,31 @@ Attacks 1 to 7 assert a specific refusal code. Attack 8 fires two completions at
 either request may legitimately win, so asserting a code is meaningless. Its condition is a
 count instead: exactly one HTTP 200 and exactly one live payment row. The loser's code is
 recorded but not asserted, because which barrier catches it depends on scheduling.
+
+## 2026-09-04
+
+**The first real Razorpay call failed, and exposed a misclassification.**
+With test-mode keys in place the buyer completed the gate and then reported
+`payment_indeterminate`. Razorpay's message was exact: *"UPI Payment Links is not supported in
+Test Mode."* Two separate faults sat behind that one line.
+
+The first was the request: `upi_link: true` is a live-mode capability. Dropped it; a standard
+payment link works in test mode.
+
+The second was worse, and was ours. Any non-OK response from the link call was being reported
+as `unknown`, which holds the mandate and freezes the session for human reconciliation. But a
+definitive 4xx means the link was never created, so nothing can be charged against it — that is
+`failed`, and safe to release. Only a 5xx or a transport fault leaves the outcome genuinely
+unknown. The two are now distinguished at the response, not at the call site.
+
+**The indeterminate path discarded the provider's order id.**
+`settle()` was called on success and on failure but not on `unknown`, so the one outcome that
+exists to be reconciled by a human stored `razorpay_order_id: null`. The held payment now
+persists whatever identifiers came back before freezing, and the audit entry carries them too.
+
+**Real latency changed which barrier caught the race.**
+Attack 8 previously reported `session_not_payable`; against the live API it reports
+`payment_already_exists`. Both are correct — slower calls shift which check the losing request
+reaches first. The assertion is a count (one HTTP 200, one live payment), not a code, so the
+test was unaffected. Asserting the code there would have produced a flake that only appeared
+once real credentials were configured.
