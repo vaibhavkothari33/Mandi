@@ -307,3 +307,17 @@ quietly showing five and implying that is all of them.
 
 The endpoint is throttled per caller and capped globally, since it creates checkout sessions on
 demand, and it restores the catalogue price in a `finally` because the drift attack moves one.
+
+## 2026-09-10
+
+**Two pages disagreed about what an order is.**
+The landing page listed the five most recent checkouts `WHERE status = 'completed'`; `/orders`
+listed the most recent checkouts with no filter at all. Both were internally consistent and they
+showed different things, which is exactly the kind of discrepancy that makes someone distrust
+every other number on the site.
+
+The landing page was right. A cart that was opened, abandoned, or refused by the gate is not an
+order, and counting it as one would overstate what the merchant sold. `/orders` now leads with
+the 41 real orders and the ₹23,399.30 they represent, and puts the 140 unpaid checkouts in a
+clearly separate section — visible, because a merchant should be able to see abandoned carts,
+but never counted as revenue.
