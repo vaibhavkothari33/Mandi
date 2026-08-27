@@ -85,3 +85,24 @@ inverse assertion, so the test now demonstrates drawdown rather than accidentall
 An early draft read `payload.kind` and `payload.aud` before checking the signature, which
 means branching on attacker-controlled data. Reordered so nothing in the payload is consulted
 until the signature verifies, with only structural decoding ahead of it.
+
+## 2026-08-31
+
+**The audit log recorded `allow` for refused completions.**
+Reading the trail for a real purchase showed `session.complete allow` on a request that had
+returned HTTP 409. The gate reports refusals as return values rather than exceptions, and the
+mutation pipeline inferred success from the absence of a throw. An audit trail that mislabels
+a refusal is worse than none, so the record now follows the response status and carries the
+refusal code. Found by reading the output, not by a failing test.
+
+**Two gate tests asserted checks that path cannot reach.**
+`mandate_already_used` and `payment_already_exists` were expected after a completed purchase,
+but both return `session_not_payable`: the gate evaluates cheap session checks before any
+signature verification. The behaviour was right and the tests were wrong. Rewrote them to
+reach those codes honestly, and added an assertion that a dead session stops after two checks
+so the early-exit ordering is itself covered.
+
+**Parameter properties resurfaced in a test helper.**
+A `FixedExecutor` class used `constructor(private readonly result)` and hit the same
+`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` as `ApiError` on day 3. Replaced with a factory returning
+an object literal.

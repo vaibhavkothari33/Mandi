@@ -21,7 +21,7 @@ export async function handleMutation(opts: {
   path: string
   action: string
   sessionId?: string | null
-  run: (auth: AuthedRequest, body: Record<string, unknown>) => MutationResult
+  run: (auth: AuthedRequest, body: Record<string, unknown>) => MutationResult | Promise<MutationResult>
 }): Promise<Response> {
   const { request, path, action } = opts
   const rawBody = await request.text()
@@ -89,15 +89,23 @@ export async function handleMutation(opts: {
   }
 
   try {
-    const result = opts.run(auth, body)
+    const result = await opts.run(auth, body)
     record(auth.idempotencyKey, result.status, result.body)
+
+    // A handler may refuse by returning a 4xx rather than throwing; the audit
+    // record follows the response status, never the absence of an exception.
+    const refused = result.status >= 400
+    const error = (result.body as { error?: { code?: string } } | null)?.error
+
     append({
       sessionId: opts.sessionId ?? null,
       actor: auth.agentId,
       action,
-      decision: 'allow',
+      decision: refused ? 'refuse' : 'allow',
+      reason: refused ? (error?.code ?? `http_${result.status}`) : null,
       detail: { status: result.status },
     })
+
     return Response.json(result.body, { status: result.status, headers })
   } catch (err) {
     const status = err instanceof ApiError ? err.status : 500
