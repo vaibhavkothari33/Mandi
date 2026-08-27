@@ -48,3 +48,6 @@ mandi.db-*
 
 # personal claude overrides
 .claude/settings.local.json
+
+# design references, not part of the project
+landing-isp/
