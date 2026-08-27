@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "/shop", label: "Shop" },
   { href: "/orders", label: "Orders" },
+  { href: "/merchant", label: "Merchant" },
   { href: "/attacks", label: "Attacks" },
 ];
 

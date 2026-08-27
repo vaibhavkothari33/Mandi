@@ -245,3 +245,15 @@ While testing the above, an agent could still request approval against a *browse
 breach, since a human would still have to approve it, but two buyers reaching into one checkout
 is confusing and unnecessary. The gate's `agent_matches_caller` check now also compares the
 mandate against the session's owner, refusing with `mandate_wrong_buyer`.
+
+## 2026-09-06 (later)
+
+**The merchant dashboard failed to render, and the cause was the database driver.**
+`/merchant` returned 500 with *"Only plain objects, and a few built-ins, can be passed to Client
+Components"*. `node:sqlite` returns rows with a **null prototype**, and React refuses to
+serialise those across the server/client boundary.
+
+The confusing part was that `/api/merchant/stats` returned the same data correctly the whole
+time — `JSON.stringify` does not care about prototypes, only the prop boundary does. Rows that
+leave the stats function are now copied into plain objects, and a test asserts it by checking
+`Object.getPrototypeOf` on everything that crosses the boundary, so this cannot regress quietly.

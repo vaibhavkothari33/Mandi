@@ -45,7 +45,13 @@ npm run buyer      # an honest agent completes a purchase
 npm run attacks    # a hostile agent tries eight ways to break in
 ```
 
-Open <http://localhost:3000> for the audit dashboard.
+Open <http://localhost:3000>. Three views worth a look:
+
+| Page | What it shows |
+|---|---|
+| `/shop` | The storefront, buying as a person |
+| `/merchant` | The shopkeeper's side — revenue, and how much of it came from agents |
+| `/sessions/[id]` | Every decision behind one order, human or agent |
 
 ### Everything you can run
 
@@ -56,7 +62,7 @@ Open <http://localhost:3000> for the audit dashboard.
 | `npm run buyer` | An honest buyer agent walks the full flow |
 | `npm run attacks` | The adversarial suite — exits non-zero on any breach |
 | `npm run smoke` | Protocol-level checks against a running merchant |
-| `npm test` | 84 unit tests |
+| `npm test` | 99 unit tests |
 | `npm run approve` | The human wallet: list, approve, deny or revoke consent |
 | `npm run mcp:demo` | Drives the MCP server, showing the agent blocked at consent |
 
