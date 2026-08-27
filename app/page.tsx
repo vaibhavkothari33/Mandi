@@ -1,69 +1,99 @@
-import Image from "next/image";
+import Link from 'next/link'
+import { verifyChain } from '@/lib/audit'
+import { db } from '@/lib/db/client'
+import { formatInr } from '@/lib/money'
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+export const dynamic = 'force-dynamic'
+
+interface SessionRow {
+  id: string
+  status: string
+  totals_json: string
+  created_at: string
+}
+
+export default async function Home() {
+  const handle = db()
+
+  const counts = handle
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM checkout_sessions) AS sessions,
+         (SELECT COUNT(*) FROM payments WHERE status = 'captured') AS captured,
+         (SELECT COUNT(*) FROM audit_log) AS entries,
+         (SELECT COUNT(*) FROM audit_log WHERE decision = 'refuse') AS refusals,
+         (SELECT COUNT(*) FROM attack_results) AS attacks,
+         (SELECT COUNT(*) FROM attack_results WHERE refused = 1) AS attacksHeld`,
+    )
+    .get() as Record<string, number>
+
+  const chain = verifyChain()
+
+  const sessions = handle
+    .prepare('SELECT id, status, totals_json, created_at FROM checkout_sessions ORDER BY created_at DESC LIMIT 15')
+    .all() as unknown as SessionRow[]
+
+  const stat = (label: string, value: string) => (
+    <div key={label} className="border border-neutral-300 dark:border-neutral-700 p-4">
+      <div className="text-xs uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className="text-2xl mt-1 tabular-nums">{value}</div>
     </div>
-  );
+  )
+
+  return (
+    <main className="max-w-4xl mx-auto p-8 font-mono text-sm">
+      <h1 className="text-xl mb-1">Mandi</h1>
+      <p className="text-neutral-500 mb-8">Agentic commerce surface for a Razorpay merchant.</p>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        {stat('Sessions', String(counts.sessions))}
+        {stat('Captured', String(counts.captured))}
+        {stat('Audit entries', String(counts.entries))}
+        {stat('Refusals', String(counts.refusals))}
+      </div>
+
+      <div className="border border-neutral-300 dark:border-neutral-700 p-4 mb-8">
+        <div className="flex justify-between">
+          <span>Audit chain</span>
+          <span className={chain.ok ? 'text-green-700 dark:text-green-500' : 'text-red-700 dark:text-red-500'}>
+            {chain.ok ? 'intact' : `broken at entry ${chain.brokenAt}`}
+          </span>
+        </div>
+        <div className="flex justify-between mt-2">
+          <span>
+            Adversarial suite{' '}
+            <Link href="/attacks" className="underline text-neutral-500">
+              view
+            </Link>
+          </span>
+          <span className={counts.attacks > 0 && counts.attacksHeld === counts.attacks ? 'text-green-700 dark:text-green-500' : 'text-neutral-500'}>
+            {counts.attacks === 0 ? 'not run' : `${counts.attacksHeld} of ${counts.attacks} refused`}
+          </span>
+        </div>
+      </div>
+
+      <h2 className="mb-3 text-neutral-500">Recent sessions</h2>
+      {sessions.length === 0 ? (
+        <p className="text-neutral-500">None yet. Run `npm run buyer`.</p>
+      ) : (
+        <table className="w-full border-collapse">
+          <tbody>
+            {sessions.map((s) => (
+              <tr key={s.id} className="border-t border-neutral-200 dark:border-neutral-800">
+                <td className="py-2">
+                  <Link href={`/sessions/${s.id}`} className="underline">
+                    {s.id}
+                  </Link>
+                </td>
+                <td className="py-2 text-neutral-500">{s.status}</td>
+                <td className="py-2 text-right tabular-nums">
+                  {formatInr((JSON.parse(s.totals_json) as { total_paise: number }).total_paise)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </main>
+  )
 }

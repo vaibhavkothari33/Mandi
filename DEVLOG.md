@@ -143,3 +143,19 @@ and wrong: it would let the agent manufacture its own authorisation, which is th
 property the gate exists to prevent. Mandate signing moved to `lib/wallet.ts`, reachable only
 from the approval CLI. The agent's tool list now has no way to create consent, only to
 request it and to spend one a human already granted.
+
+## 2026-09-03
+
+**Ageing a mandate by editing the database did nothing.**
+The expiry attack first set `expires_at` on the stored mandate row to the past and expected a
+refusal. The gate accepted it: expiry is read from the signed `exp` claim inside the JWS, not
+from the bookkeeping column beside it. That is the correct precedence — a merchant that
+trusted its own mutable column over the signature could be talked into honouring a mandate the
+buyer never granted — so the attack was rewritten to present a genuinely short-lived mandate.
+The database columns exist for querying, not for deciding.
+
+**The race attack needed a different success condition.**
+Attacks 1 to 7 assert a specific refusal code. Attack 8 fires two completions at once, where
+either request may legitimately win, so asserting a code is meaningless. Its condition is a
+count instead: exactly one HTTP 200 and exactly one live payment row. The loser's code is
+recorded but not asserted, because which barrier catches it depends on scheduling.

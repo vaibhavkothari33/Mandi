@@ -13,7 +13,8 @@
     "approve": "node --no-warnings=ExperimentalWarning scripts/approve.ts",
     "buyer": "node --no-warnings=ExperimentalWarning harness/buyer.ts",
     "mcp": "node --no-warnings=ExperimentalWarning mcp/server.ts",
-    "mcp:demo": "node --no-warnings=ExperimentalWarning scripts/mcp-demo.ts"
+    "mcp:demo": "node --no-warnings=ExperimentalWarning scripts/mcp-demo.ts",
+    "attacks": "node --no-warnings=ExperimentalWarning harness/report.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -126,3 +126,14 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS audit_by_session ON audit_log(session_id, seq);
+
+CREATE TABLE IF NOT EXISTS attack_results (
+  id            INTEGER PRIMARY KEY,
+  name          TEXT    NOT NULL,
+  premise       TEXT    NOT NULL,
+  expected      TEXT    NOT NULL,
+  actual        TEXT    NOT NULL,
+  refused       INTEGER NOT NULL,
+  detail        TEXT    NOT NULL DEFAULT '',
+  ran_at        TEXT    NOT NULL
+);
