@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__mandi__search_catalog",
+      "mcp__mandi__start_checkout",
+      "mcp__mandi__get_quote",
+      "mcp__mandi__request_approval",
+      "mcp__mandi__check_approval"
+    ],
+    "ask": [
+      "mcp__mandi__complete_purchase"
+    ]
+  }
+}

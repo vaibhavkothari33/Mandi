@@ -45,3 +45,6 @@ mandi.db
 mandi.db-*
 .env
 !.env.example
+
+# personal claude overrides
+.claude/settings.local.json
