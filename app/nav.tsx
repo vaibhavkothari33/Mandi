@@ -87,13 +87,15 @@ export function Nav() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-neutral-200/80 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80 backdrop-blur supports-[backdrop-filter]:bg-white/65 dark:supports-[backdrop-filter]:bg-neutral-950/65">
-      <nav className="max-w-5xl mx-auto px-6 h-14 flex items-center gap-3">
+      {/* Links are centred against the bar itself, so the logo and cart can change
+          width without dragging them off centre. */}
+      <nav className="relative max-w-7xl mx-auto px-5 sm:px-7 h-16 flex items-center">
         <Link href="/" className="flex items-center gap-2.5 font-medium tracking-tight shrink-0">
           <Mark />
           Mandi
         </Link>
 
-        <div className="hidden md:flex items-center gap-1 ml-4">
+        <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
           {LINKS.map((link) => (
             <Link
               key={link.href}
@@ -110,7 +112,7 @@ export function Nav() {
           ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 shrink-0">
           <CartBadge />
 
           <button
@@ -132,7 +134,7 @@ export function Nav() {
       </nav>
 
       {open && (
-        <div className="md:hidden border-t border-neutral-200 dark:border-neutral-800 px-4 py-3">
+        <div className="md:hidden border-t border-neutral-200 dark:border-neutral-800 px-5 py-3">
           <div className="flex flex-col gap-1">
             {LINKS.map((link) => (
               <Link
