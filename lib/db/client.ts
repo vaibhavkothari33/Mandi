@@ -2,16 +2,16 @@ import { DatabaseSync } from 'node:sqlite'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const g = globalThis as unknown as { __counterDb?: DatabaseSync }
+const g = globalThis as unknown as { __mandiDb?: DatabaseSync }
 
 export function db(): DatabaseSync {
-  if (g.__counterDb) return g.__counterDb
+  if (g.__mandiDb) return g.__mandiDb
 
-  const path = process.env.DB_PATH ?? join(process.cwd(), 'counter.db')
+  const path = process.env.DB_PATH ?? join(process.cwd(), 'mandi.db')
   const handle = new DatabaseSync(path)
   handle.exec(readFileSync(join(process.cwd(), 'lib/db/schema.sql'), 'utf8'))
 
-  g.__counterDb = handle
+  g.__mandiDb = handle
   return handle
 }
 

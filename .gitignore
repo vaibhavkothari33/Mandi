@@ -41,7 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 # local db
-counter.db
-counter.db-*
+mandi.db
+mandi.db-*
 .env
 !.env.example

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Counter",
+  title: "Mandi",
   description: "Agentic commerce surface for a Razorpay merchant",
 };
 

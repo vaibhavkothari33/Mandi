@@ -1,6 +1,6 @@
 export const MERCHANT = {
-  id: process.env.MERCHANT_ID ?? 'mrc_counter_demo',
-  name: process.env.MERCHANT_NAME ?? 'Counter Provisions',
+  id: process.env.MERCHANT_ID ?? 'mrc_mandi_demo',
+  name: process.env.MERCHANT_NAME ?? 'Mandi Provisions',
   currency: 'INR',
 } as const
 
