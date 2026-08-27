@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Coins } from './coins'
 import { verifyChain } from '@/lib/audit'
 import { db } from '@/lib/db/client'
 import { WEB_BUYER } from '@/lib/human'
@@ -69,6 +70,8 @@ export default async function Home() {
               WebkitMaskImage: 'linear-gradient(to bottom, black, transparent 70%)',
             }}
           />
+
+          <Coins />
 
           <div className="relative z-10 px-6 pt-14 sm:pt-20 text-center flex flex-col items-center">
             <span

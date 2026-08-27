@@ -41,8 +41,26 @@ body {
   animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Coins drifting behind the hero. Each one sets its own distance, tilt and
+   timing through custom properties, so one keyframe serves the whole field. */
+@keyframes drift {
+  from {
+    transform: translate3d(0, var(--drift-from), 0) rotate(var(--tilt-from));
+  }
+  to {
+    transform: translate3d(0, var(--drift-to), 0) rotate(var(--tilt-to));
+  }
+}
+
+.coin {
+  animation: drift var(--drift-duration) ease-in-out infinite alternate;
+  animation-delay: var(--drift-delay);
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rise {
+  .rise,
+  .coin {
     animation: none;
   }
 }
