@@ -209,3 +209,13 @@ The CLI listing now also shows approvals that are granted but unspent, since tha
 authority the human could not previously see. Adding a column to a table created by
 `CREATE TABLE IF NOT EXISTS` needed a guarded `ALTER TABLE` at open, so existing databases
 migrate instead of silently lacking the field.
+
+## 2026-09-05
+
+**The remote MCP endpoint returned an empty stream.**
+Adding `/api/mcp` for web clients, `initialize` answered `200 text/event-stream` with no body.
+The handler closed the server in a `finally` block immediately after `handleRequest` returned —
+but that Response streams its body, so the server was being torn down before anything was
+written to it. Moved the teardown onto `transport.onclose`, so the server outlives the response
+it is still writing. The auth check failed correctly throughout, which is why this looked like
+an auth problem first.

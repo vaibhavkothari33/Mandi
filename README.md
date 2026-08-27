@@ -168,6 +168,27 @@ a note the merchant has to remember to read.
 Claude can then complete the purchase. `npm run mcp:demo` shows the same sequence
 non-interactively, including the agent trying to spend an approval that is still pending.
 
+### Claude on the web
+
+Claude.ai reaches connectors from Anthropic's infrastructure, not from your machine, so a
+stdio server is unreachable there. The same six tools are also served over HTTP at `/api/mcp`
+for that case.
+
+The endpoint can create payment instructions, so it fails closed: without `MCP_BEARER_TOKEN`
+it returns `503 remote_mcp_disabled`, and with one set it requires `Authorization: Bearer`.
+
+```bash
+# 1. set a long random token in .env, then restart
+MCP_BEARER_TOKEN=$(openssl rand -hex 32)
+
+# 2. expose it over HTTPS — Claude cannot reach localhost
+cloudflared tunnel --url http://localhost:3000
+```
+
+Add the printed `https://…/api/mcp` URL as a custom connector in Claude's settings, with the
+bearer token. Treat the tunnel as public: anyone holding the URL and token can drive the buyer
+tools, which is why the token is required and why this stays on test-mode keys.
+
 ### The six tools, and the one that is missing
 
 `search_catalog` · `start_checkout` · `get_quote` · `request_approval` · `check_approval` ·
