@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local db
+counter.db
+counter.db-*
+.env
+!.env.example
