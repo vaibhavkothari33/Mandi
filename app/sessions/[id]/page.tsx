@@ -4,6 +4,7 @@ import { forSession } from '@/lib/audit'
 import { db } from '@/lib/db/client'
 import { formatInr } from '@/lib/money'
 import { forSession as paymentsForSession } from '@/lib/pay/store'
+import { WEB_BUYER } from '@/lib/human'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,8 +34,19 @@ export default async function SessionPage({ params }: PageProps<'/sessions/[id]'
       </Link>
 
       <h1 className="text-lg mt-4 break-all">{session.id}</h1>
-      <p className="text-neutral-500 mb-6">
-        {session.status} · {formatInr(totals.total_paise)} · {session.agent_id ?? 'no agent'}
+      <p className="text-neutral-500 mb-2">
+        {session.status} · {formatInr(totals.total_paise)}
+      </p>
+      <p className="mb-6">
+        <span
+          className={`text-xs px-2 py-0.5 rounded ${
+            session.agent_id === WEB_BUYER
+              ? 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+              : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-500'
+          }`}
+        >
+          {session.agent_id === WEB_BUYER ? 'bought in the browser' : `bought by ${session.agent_id ?? 'no agent'}`}
+        </span>
       </p>
 
       {payments.length > 0 && (

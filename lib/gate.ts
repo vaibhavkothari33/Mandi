@@ -86,6 +86,16 @@ export function evaluate(request: GateRequest): GateDecision {
       `mandate authorises ${cart.agent}, request is signed by ${request.callerAgentId}`,
     )
   }
+
+  // A checkout belongs to whoever opened it. This is what keeps the browser
+  // and the agent from reaching into each other's carts.
+  if (session.agentId && cart.agent !== session.agentId) {
+    return fail(
+      'agent_matches_caller',
+      'mandate_wrong_buyer',
+      `this checkout belongs to ${session.agentId}, not ${cart.agent}`,
+    )
+  }
   pass('agent_matches_caller')
 
   if (cart.session_id !== session.id) {

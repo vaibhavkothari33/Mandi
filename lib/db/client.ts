@@ -18,9 +18,14 @@ export function db(): DatabaseSync {
 
 /** CREATE TABLE IF NOT EXISTS cannot add columns to a database that predates them. */
 function migrate(handle: DatabaseSync): void {
-  const columns = handle.prepare('PRAGMA table_info(approvals)').all() as Array<{ name: string }>
-  if (!columns.some((c) => c.name === 'revoked_at')) {
+  const approvals = handle.prepare('PRAGMA table_info(approvals)').all() as Array<{ name: string }>
+  if (!approvals.some((c) => c.name === 'revoked_at')) {
     handle.exec('ALTER TABLE approvals ADD COLUMN revoked_at TEXT')
+  }
+
+  const sessions = handle.prepare('PRAGMA table_info(checkout_sessions)').all() as Array<{ name: string }>
+  if (!sessions.some((c) => c.name === 'claim_token_hash')) {
+    handle.exec('ALTER TABLE checkout_sessions ADD COLUMN claim_token_hash TEXT')
   }
 }
 

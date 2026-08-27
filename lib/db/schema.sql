@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS checkout_sessions (
   quote_id          TEXT,
   created_at        TEXT    NOT NULL,
   updated_at        TEXT    NOT NULL,
-  version           INTEGER NOT NULL DEFAULT 0
+  version           INTEGER NOT NULL DEFAULT 0,
+  claim_token_hash  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS quotes (

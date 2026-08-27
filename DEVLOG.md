@@ -219,3 +219,29 @@ but that Response streams its body, so the server was being torn down before any
 written to it. Moved the teardown onto `transport.onclose`, so the server outlives the response
 it is still writing. The auth check failed correctly throughout, which is why this looked like
 an auth problem first.
+
+## 2026-09-06
+
+**Adding a browser checkout risked creating a second way to spend money.**
+A human buying directly does not need a mandate — they are present, and the click is the
+consent. But a "Pay" button that skips the gate would have left twelve checks on the agent path
+and none beside it, which is the opposite of the argument this project makes.
+
+Resolved by having the browser path sign its own mandate at the moment of the click and then run
+the same `authorize()` as the agent path. There is exactly one way to spend money here, and a
+human order produces the same twelve checks in the same audit trail. A test asserts the check
+count and that the trail shape matches.
+
+**The public pay route was an obvious way around consent.**
+An unauthenticated endpoint that completes a checkout is one an agent could call on its own
+session to self-approve. Three things close it, none of which needed a new auth system: browser
+sessions are stamped with the reserved identity `human:web`; that identity is never registered
+in the agents table, so `registerAgent` refuses it and HMAC authentication for it always fails;
+and the pay route refuses any session not stamped that way. Creation also returns a claim token,
+so one browser cannot complete another's checkout.
+
+**A checkout now belongs to the buyer who opened it.**
+While testing the above, an agent could still request approval against a *browser* cart — not a
+breach, since a human would still have to approve it, but two buyers reaching into one checkout
+is confusing and unnecessary. The gate's `agent_matches_caller` check now also compares the
+mandate against the session's owner, refusing with `mandate_wrong_buyer`.
