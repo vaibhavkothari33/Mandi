@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS approvals (
   intent_jws   TEXT,
   cart_jws     TEXT,
   created_at   TEXT    NOT NULL,
-  decided_at   TEXT
+  decided_at   TEXT,
+  revoked_at   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS idempotency_keys (

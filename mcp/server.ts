@@ -150,6 +150,9 @@ server.registerTool(
 
     if (approval.status === 'pending') return text('pending — still waiting on the human')
     if (approval.status === 'denied') return text('denied — the human declined. Do not retry.')
+    if (approval.revoked_at) {
+      return text('revoked — the human withdrew this consent. Do not retry; ask again if still needed.')
+    }
 
     return text(`approved — call complete_purchase with session ${approval.session_id}`)
   },
@@ -167,6 +170,7 @@ server.registerTool(
     const approval = wallet.find(approval_id)
     if (!approval) return text(`No such approval: ${approval_id}`)
     if (approval.status !== 'approved') return text(`Approval is ${approval.status}, not approved.`)
+    if (approval.revoked_at) return text('That approval was revoked by the human. Do not retry.')
     if (approval.session_id !== session_id) return text('That approval belongs to a different session.')
 
     const reply = await client.post(`/api/checkout_sessions/${session_id}/complete`, {

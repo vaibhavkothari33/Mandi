@@ -56,8 +56,8 @@ Open <http://localhost:3000> for the audit dashboard.
 | `npm run buyer` | An honest buyer agent walks the full flow |
 | `npm run attacks` | The adversarial suite — exits non-zero on any breach |
 | `npm run smoke` | Protocol-level checks against a running merchant |
-| `npm test` | 77 unit tests |
-| `npm run approve` | The human wallet: list, approve or deny pending requests |
+| `npm test` | 84 unit tests |
+| `npm run approve` | The human wallet: list, approve, deny or revoke consent |
 | `npm run mcp:demo` | Drives the MCP server, showing the agent blocked at consent |
 
 ---
@@ -154,9 +154,16 @@ Claude will search, open a checkout, lock a quote — and stop. It has no tool t
 consent. Approve in a second terminal:
 
 ```bash
-npm run approve                 # lists what is waiting
-npm run approve -- apr_xxxxxxxx # sign the mandates
+npm run approve                          # lists what is waiting, and what is still live
+npm run approve -- apr_xxxxxxxx          # sign the mandates
+npm run approve -- --deny apr_xxxxxxxx   # refuse a pending request
+npm run approve -- --revoke apr_xxxxxxxx # withdraw consent already granted
 ```
+
+Consent that has been granted but not yet spent is live authority, so the listing shows it and
+it can be withdrawn. Revocation consumes the underlying cart mandate rather than setting a
+flag, so the gate refuses it by the same single-use rule that stops a replay — enforcement, not
+a note the merchant has to remember to read.
 
 Claude can then complete the purchase. `npm run mcp:demo` shows the same sequence
 non-interactively, including the agent trying to spend an approval that is still pending.

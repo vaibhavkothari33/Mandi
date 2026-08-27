@@ -3,6 +3,7 @@ import { db, nowIso } from './db/client.ts'
 import { ApiError } from './http.ts'
 import { formatInr } from './money.ts'
 import { issueCart, issueIntent } from './mandate/issue.ts'
+import { consume } from './mandate/store.ts'
 import { byId as quoteById, isExpired, secondsRemaining } from './quote.ts'
 import { get as getSession } from './session/store.ts'
 
@@ -19,6 +20,7 @@ export interface ApprovalRow {
   cart_jws: string | null
   created_at: string
   decided_at: string | null
+  revoked_at: string | null
 }
 
 /**
@@ -77,6 +79,25 @@ export const pending = (): ApprovalRow[] =>
     .all() as unknown as ApprovalRow[]
 
 /**
+ * Approvals that were granted, not revoked, and not yet spent. These are live
+ * authority: they remain spendable until revoked or until their quote lapses,
+ * so the human needs to be able to see them.
+ */
+export const outstanding = (): ApprovalRow[] =>
+  db()
+    .prepare(
+      `SELECT * FROM approvals a
+        WHERE a.status = 'approved'
+          AND a.revoked_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM payments p
+             WHERE p.session_id = a.session_id AND p.status != 'failed'
+          )
+        ORDER BY a.created_at`,
+    )
+    .all() as unknown as ApprovalRow[]
+
+/**
  * Signs the mandates. Called only from the approval CLI, which stands in for a
  * wallet app where a human would confirm on their own device.
  */
@@ -124,6 +145,36 @@ export function approve(
         WHERE id = ? RETURNING *`,
     )
     .get(intent.jws, cart.jws, nowIso(), id) as unknown as ApprovalRow
+}
+
+/**
+ * Withdraws consent that was already granted.
+ *
+ * Revocation consumes the underlying cart mandate rather than only marking a
+ * row, so the gate refuses it by the same single-use rule that stops a replay.
+ * A flag the merchant had to remember to read would not be enforcement.
+ */
+export function revoke(id: string): ApprovalRow {
+  const approval = get(id)
+
+  if (approval.status !== 'approved') {
+    throw new ApiError(409, 'approval_not_approved', `approval is ${approval.status}; nothing to revoke`)
+  }
+  if (approval.revoked_at) {
+    throw new ApiError(409, 'approval_revoked', 'approval was already revoked')
+  }
+
+  const cart = JSON.parse(
+    Buffer.from(String(approval.cart_jws).split('.')[1], 'base64url').toString('utf8'),
+  ) as { jti: string }
+
+  if (!consume(cart.jti)) {
+    throw new ApiError(409, 'approval_spent', 'this approval has already been spent and cannot be revoked')
+  }
+
+  return db()
+    .prepare('UPDATE approvals SET revoked_at = ? WHERE id = ? RETURNING *')
+    .get(nowIso(), id) as unknown as ApprovalRow
 }
 
 export function deny(id: string): ApprovalRow {

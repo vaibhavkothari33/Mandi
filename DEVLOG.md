@@ -187,3 +187,25 @@ Attack 8 previously reported `session_not_payable`; against the live API it repo
 reaches first. The assertion is a count (one HTTP 200, one live payment), not a code, so the
 test was unaffected. Asserting the code there would have produced a flake that only appeared
 once real credentials were configured.
+
+## 2026-09-04 (later)
+
+**A real session found consent that could not be withdrawn.**
+Driving the MCP server from Claude, the agent built a cart, the human changed their mind, and
+the agent rebuilt it as a second session. The human then approved the *first* approval by
+mistake and asked to cancel it. There was no way to.
+
+The agent declined to spend the stale approval, which is the right outcome — but it reached
+that outcome by judgement, not because anything stopped it. The gate would have allowed it: the
+mandate was validly signed, in scope, bound to its own session, and its quote was still live.
+Relying on the model to decline is exactly the property this project argues against.
+
+Added `wallet.revoke()`. It consumes the underlying cart mandate rather than setting a flag, so
+a withdrawn approval is refused by the same single-use rule that stops a replay — the gate did
+not need a new check. A test asserts this by clearing `revoked_at` back to null and confirming
+the gate still refuses: the approval row is a display, the mandate is the control.
+
+The CLI listing now also shows approvals that are granted but unspent, since that is live
+authority the human could not previously see. Adding a column to a table created by
+`CREATE TABLE IF NOT EXISTS` needed a guarded `ALTER TABLE` at open, so existing databases
+migrate instead of silently lacking the field.

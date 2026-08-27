@@ -54,6 +54,13 @@ mandate check is theatre — an agent could approve a cart it had priced itself.
 never imports and which the MCP server exposes no tool for. The six tools an agent has can
 request an approval and spend one that exists. Creating one requires `npm run approve`.
 
+**The human can withdraw consent.** An approval that has been granted but not spent is live
+authority until its quote lapses, and expiry is a side effect rather than a guarantee.
+`wallet.revoke()` consumes the cart mandate, so a withdrawn approval is refused by the same
+single-use rule that stops a replay. This was added after a real session in which the wrong
+approval was granted: the agent declined to spend it, but that was the model's judgement rather
+than an enforced property, and judgement is not a control.
+
 Asymmetric keys make the third boundary real: the wallet signs with Ed25519, the merchant
 verifies with the public half published at `/.well-known/jwks.json`. A compromised merchant
 cannot forge consent it was never given.
@@ -209,6 +216,7 @@ different database. No code would change.
 |---|---|
 | Mandate private key in the merchant's database | Buyer's wallet or device; merchant holds only the public key |
 | Approval via a local CLI | A wallet app with device biometrics |
+| Revocation via a local CLI | Revocation propagated to the rail, as UPI mandates support |
 | Reserve Pay modelled in application code | NPCI UAP / UPI Reserve Pay rails |
 | One shared secret per agent | Rotating credentials, per-agent revocation |
 | SQLite | Postgres with the same schema and constraints |

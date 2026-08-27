@@ -10,9 +10,18 @@ export function db(): DatabaseSync {
   const path = process.env.DB_PATH ?? join(process.cwd(), 'mandi.db')
   const handle = new DatabaseSync(path)
   handle.exec(readFileSync(join(process.cwd(), 'lib/db/schema.sql'), 'utf8'))
+  migrate(handle)
 
   g.__mandiDb = handle
   return handle
+}
+
+/** CREATE TABLE IF NOT EXISTS cannot add columns to a database that predates them. */
+function migrate(handle: DatabaseSync): void {
+  const columns = handle.prepare('PRAGMA table_info(approvals)').all() as Array<{ name: string }>
+  if (!columns.some((c) => c.name === 'revoked_at')) {
+    handle.exec('ALTER TABLE approvals ADD COLUMN revoked_at TEXT')
+  }
 }
 
 export function close(): void {
