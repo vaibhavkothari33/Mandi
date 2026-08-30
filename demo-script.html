@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mandi Demo Run-of-Show</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+
+<style>
+  :root{
+    --paper:#F1F2F6; --card:#FFFFFF; --card-2:#FAFAFD;
+    --ink:#14151C; --muted:#63657C; --rule:#DBDDE6;
+    --accent:#2A3BD6; --accent-soft:#E7E9FB;
+    --danger:#A82217; --danger-soft:#F8E7E5;
+    --invert-bg:#14151C; --invert-ink:#F1F2F6; --invert-muted:#8C8EA6;
+    --say-size:1.28rem;
+    --sans:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --serif:"Newsreader",Georgia,"Times New Roman",serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0F1016; --card:#181A23; --card-2:#1E212B;
+      --ink:#E8E9F0; --muted:#989AAE; --rule:#2A2D3A;
+      --accent:#8792FF; --accent-soft:#20243D;
+      --danger:#F0857A; --danger-soft:#33201E;
+      --invert-bg:#E8E9F0; --invert-ink:#0F1016; --invert-muted:#4A4C60;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0F1016; --card:#181A23; --card-2:#1E212B;
+    --ink:#E8E9F0; --muted:#989AAE; --rule:#2A2D3A;
+    --accent:#8792FF; --accent-soft:#20243D;
+    --danger:#F0857A; --danger-soft:#33201E;
+    --invert-bg:#E8E9F0; --invert-ink:#0F1016; --invert-muted:#4A4C60;
+  }
+  :root[data-size="large"]{ --say-size:1.72rem; }
+
+  *{ box-sizing:border-box; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width:960px; margin:0 auto; padding:48px 24px 96px; }
+  @media (max-width:640px){ .wrap{ padding:32px 16px 64px; } }
+
+  h1,h2,h3{ margin:0; text-wrap:balance; }
+  p{ margin:0; }
+  code,kbd{ font-family:var(--mono); }
+
+  .eyebrow{
+    font-family:var(--mono); font-size:.72rem; font-weight:500;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  }
+
+  .masthead{ display:flex; flex-direction:column; gap:14px; padding-bottom:28px; border-bottom:2px solid var(--ink); }
+  .masthead h1{ font-size:clamp(2.1rem,6vw,3.3rem); font-weight:700; letter-spacing:-.028em; line-height:1.02; }
+  .masthead .sub{ font-family:var(--serif); font-size:1.06rem; color:var(--muted); max-width:60ch; }
+
+  .facts{ display:flex; flex-wrap:wrap; gap:10px 26px; padding-top:6px; }
+  .fact{ display:flex; flex-direction:column; gap:1px; }
+  .fact .k{ font-family:var(--mono); font-size:.66rem; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+  .fact .v{ font-family:var(--mono); font-size:.94rem; font-weight:600; font-variant-numeric:tabular-nums; }
+
+  .controls{ display:flex; flex-wrap:wrap; gap:8px; margin-top:22px; }
+  .btn{
+    font-family:var(--mono); font-size:.76rem; font-weight:500; letter-spacing:.05em;
+    color:var(--ink); background:var(--card); border:1px solid var(--rule);
+    padding:8px 13px; border-radius:2px; cursor:pointer;
+  }
+  .btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .btn[aria-pressed="true"]{ background:var(--accent); border-color:var(--accent); color:var(--card); }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .timeline{ margin-top:40px; }
+  .tl-bar{ display:flex; gap:2px; height:38px; margin-top:10px; }
+  .tl-seg{
+    display:flex; align-items:center; justify-content:center; min-width:0;
+    background:var(--accent-soft); color:var(--accent);
+    font-family:var(--mono); font-size:.72rem; font-weight:600;
+    border-bottom:2px solid var(--accent);
+  }
+  .tl-seg.is-hold{ background:var(--ink); color:var(--paper); border-bottom-color:var(--ink); }
+  .tl-scale{ display:flex; justify-content:space-between; margin-top:6px; font-family:var(--mono); font-size:.68rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  section{ margin-top:52px; }
+  .sec-head{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding-bottom:10px; border-bottom:1px solid var(--rule); }
+  .sec-head h2{ font-size:1.18rem; font-weight:600; letter-spacing:-.012em; }
+
+  .prep{ list-style:none; margin:18px 0 0; padding:0; display:flex; flex-direction:column; gap:2px; }
+  .prep li{ display:flex; }
+  .prep label{ display:flex; gap:12px; align-items:flex-start; width:100%; padding:9px 12px; background:var(--card); border:1px solid var(--rule); cursor:pointer; }
+  .prep label:hover{ border-color:var(--accent); }
+  .prep input{ margin:4px 0 0; accent-color:var(--accent); width:15px; height:15px; flex:none; }
+  .prep .txt{ font-size:.95rem; }
+  .prep input:checked + .txt{ color:var(--muted); text-decoration:line-through; }
+  .prep .txt code{ font-size:.86em; background:var(--card-2); padding:1px 5px; border:1px solid var(--rule); }
+
+  .cmp{ width:100%; border-collapse:collapse; margin-top:18px; font-size:.92rem; }
+  .cmp th,.cmp td{ text-align:left; padding:10px 12px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  .cmp thead th{ font-family:var(--mono); font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:500; }
+  .cmp tbody th{ font-weight:600; width:26%; }
+  .cmp .pick{ color:var(--accent); font-weight:600; }
+  .tbl-scroll{ overflow-x:auto; }
+
+  .beat{ display:grid; grid-template-columns:104px 1fr; gap:0 22px; margin-top:26px; }
+  @media (max-width:720px){ .beat{ grid-template-columns:1fr; gap:10px; } }
+
+  .rail{ padding-top:2px; }
+  .rail .tc{ font-family:var(--mono); font-size:1.02rem; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+  .rail .dur{ font-family:var(--mono); font-size:.7rem; color:var(--muted); margin-top:2px; }
+  .rail .num{ font-family:var(--mono); font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-top:10px; }
+  @media (max-width:720px){
+    .rail{ display:flex; align-items:baseline; gap:12px; }
+    .rail .num,.rail .dur{ margin-top:0; }
+  }
+
+  .card{ background:var(--card); border:1px solid var(--rule); border-left:3px solid var(--accent); padding:20px 22px; display:flex; flex-direction:column; gap:16px; }
+  .card h3{ font-size:1.32rem; font-weight:600; letter-spacing:-.018em; }
+
+  .row{ display:flex; gap:10px; align-items:flex-start; }
+  .chip{
+    flex:none; font-family:var(--mono); font-size:.63rem; font-weight:600; letter-spacing:.13em; text-transform:uppercase;
+    padding:4px 8px; border-radius:2px; margin-top:3px; min-width:64px; text-align:center;
+  }
+  .chip.screen{ background:var(--accent-soft); color:var(--accent); }
+  .chip.do{ background:var(--ink); color:var(--paper); }
+  .chip.say{ background:transparent; color:var(--muted); border:1px solid var(--rule); }
+  .row .body{ min-width:0; flex:1; }
+  .row .body .lead{ font-size:.98rem; }
+  .row .body .note{ font-size:.88rem; color:var(--muted); margin-top:4px; }
+
+  .say{ font-family:var(--serif); font-size:var(--say-size); line-height:1.5; letter-spacing:-.005em; max-width:64ch; }
+  .say p + p{ margin-top:.7em; }
+
+  pre{
+    margin:0; overflow-x:auto; background:var(--card-2); border:1px solid var(--rule);
+    padding:12px 14px; font-family:var(--mono); font-size:.86rem; line-height:1.7;
+  }
+  pre .c{ color:var(--muted); }
+
+  .steps{ margin:0; padding-left:1.15em; font-size:.95rem; display:flex; flex-direction:column; gap:3px; }
+  .steps code{ font-size:.87em; }
+
+  .beat.hold .card{ background:var(--invert-bg); color:var(--invert-ink); border-color:var(--invert-bg); border-left-color:var(--invert-bg); }
+  .beat.hold .card h3{ color:var(--invert-ink); }
+  .beat.hold .chip.do{ background:var(--invert-ink); color:var(--invert-bg); }
+  .beat.hold .chip.say{ color:var(--invert-muted); border-color:var(--invert-muted); }
+  .beat.hold .row .body .note{ color:var(--invert-muted); }
+  .beat.hold .say{ color:var(--invert-ink); }
+  .beat.hold pre{ background:transparent; border-color:var(--invert-muted); color:var(--invert-ink); }
+  .beat.hold code{ color:var(--invert-ink); }
+  .beat.hold .hold-mark{
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--invert-bg); background:var(--invert-ink); padding:10px 14px; text-align:center; font-weight:600;
+  }
+
+  .warn{ border-left:3px solid var(--danger); background:var(--danger-soft); color:var(--ink); padding:12px 15px; font-size:.92rem; }
+  .warn strong{ color:var(--danger); }
+
+  .notes{ list-style:none; margin:18px 0 0; padding:0; display:flex; flex-direction:column; gap:0; }
+  .notes li{ padding:12px 0; border-bottom:1px solid var(--rule); font-size:.95rem; display:flex; gap:14px; }
+  .notes .tag{ flex:none; font-family:var(--mono); font-size:.63rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase; width:54px; padding-top:3px; color:var(--muted); }
+  .notes .tag.no{ color:var(--danger); }
+
+  .prose{ font-size:.95rem; max-width:66ch; margin-top:16px; }
+
+  footer{ margin-top:64px; padding-top:20px; border-top:2px solid var(--ink); font-family:var(--mono); font-size:.74rem; color:var(--muted); display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between; }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+  @media print{
+    body{ background:#fff; color:#000; }
+    .controls, .timeline{ display:none; }
+    .card, .prep label, pre{ break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Shooting script &middot; Razorpay AI Buildathon &middot; Track 01</div>
+    <h1>Mandi Demo Run-of-Show</h1>
+    <p class="sub">Seven beats, three minutes. Every line to say, every key to press, in the order the camera needs them.</p>
+    <div class="facts">
+      <div class="fact"><span class="k">Runtime</span><span class="v">3:00</span></div>
+      <div class="fact"><span class="k">Beats</span><span class="v">7</span></div>
+      <div class="fact"><span class="k">Spoken</span><span class="v">~460 words</span></div>
+      <div class="fact"><span class="k">Record on</span><span class="v">claude.ai</span></div>
+      <div class="fact"><span class="k">Rehearse on</span><span class="v">Claude Code CLI</span></div>
+      <div class="fact"><span class="k">Cart total</span><span class="v">&#8377;458.95</span></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <button class="btn" id="size-toggle" aria-pressed="false">Teleprompter size</button>
+    <button class="btn" id="theme-toggle">Toggle dark / light</button>
+    <button class="btn" id="reset-prep">Reset prep checklist</button>
+  </div>
+
+  <section class="timeline">
+    <div class="sec-head"><h2>The shape of it</h2><span class="eyebrow">segment width = real duration</span></div>
+    <div class="tl-bar">
+      <div class="tl-seg" style="flex:18" title="Beat 1 — The claim">1</div>
+      <div class="tl-seg" style="flex:37" title="Beat 2 — Attacks, live">2</div>
+      <div class="tl-seg is-hold" style="flex:40" title="Beat 3 — The buy, and the stall">3</div>
+      <div class="tl-seg" style="flex:30" title="Beat 4 — The signature">4</div>
+      <div class="tl-seg" style="flex:25" title="Beat 5 — The receipt">5</div>
+      <div class="tl-seg" style="flex:15" title="Beat 6 — Merchant">6</div>
+      <div class="tl-seg" style="flex:15" title="Beat 7 — Revoke">7</div>
+    </div>
+    <div class="tl-scale"><span>0:00</span><span>1:00</span><span>2:00</span><span>3:00</span></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Where to record</h2></div>
+    <div class="tbl-scroll">
+      <table class="cmp">
+        <thead><tr><th></th><th>Claude Code CLI</th><th>claude.ai</th></tr></thead>
+        <tbody>
+          <tr><th>Setup</th><td class="pick">Zero &mdash; <code>.mcp.json</code> ships in the repo</td><td>Tunnel plus <code>MCP_BEARER_TOKEN</code></td></tr>
+          <tr><th>Can drop mid-take</th><td class="pick">No</td><td>Yes &mdash; tunnel dies, take is lost</td></tr>
+          <tr><th>On camera</th><td>Terminal beside terminal</td><td class="pick">Tool-call cards, reads as a product</td></tr>
+          <tr><th>What it proves</th><td>Local MCP works</td><td class="pick">Remote endpoint works &mdash; the harder claim</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prose">Record on <strong>claude.ai</strong>. It reads better to judges, and it demonstrates <code>app/api/mcp/route.ts</code> genuinely serving over HTTPS with bearer auth. Rehearse every beat on the CLI first &mdash; free, instant, no test link burned on a failed take. <code>npm run mcp:demo</code> is the deterministic emergency backup: same sequence, scripted, cannot fail.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Exposing the endpoint with ngrok</h2><span class="eyebrow">claude.ai cannot reach localhost</span></div>
+
+    <p class="prose">Claude on the web calls connectors from Anthropic&rsquo;s infrastructure, not from your machine, so the merchant has to be on a public HTTPS address. Four steps, once.</p>
+
+    <p class="prose"><strong>1. Install and authenticate.</strong> Sign up at ngrok.com, copy the authtoken from the dashboard.</p>
+    <pre>winget install ngrok.ngrok        <span class="c"># or: npm i -g ngrok</span>
+ngrok config add-authtoken YOUR_TOKEN</pre>
+
+    <p class="prose"><strong>2. Claim your free static domain.</strong> The free plan includes one. Do this &mdash; it is the difference between re-adding the connector before every take and never touching it again.</p>
+    <pre><span class="c"># ngrok dashboard &rarr; Domains &rarr; Create Domain</span>
+<span class="c"># you get something like: mandi-demo.ngrok-free.app</span></pre>
+
+    <p class="prose"><strong>3. Start the merchant with a bearer token, then the tunnel.</strong> Two terminals.</p>
+    <pre><span class="c"># terminal 1 (PowerShell)</span>
+$env:MCP_BEARER_TOKEN = -join ((1..32) | % { '{0:x2}' -f (Get-Random -Max 256) })
+$env:MCP_BEARER_TOKEN          <span class="c"># copy this, you need it in step 4</span>
+npm start
+
+<span class="c"># terminal 2</span>
+ngrok http 3000 --url=mandi-demo.ngrok-free.app</pre>
+
+    <p class="prose">The variable must be set in the same terminal <em>before</em> <code>npm start</code> &mdash; the server process only inherits what existed when it launched.</p>
+
+    <p class="prose"><strong>4. Add the connector.</strong> Claude settings &rarr; Connectors &rarr; Add custom connector:</p>
+    <pre>URL    https://mandi-demo.ngrok-free.app/api/mcp
+Auth   Bearer &lt;the token from step 3&gt;</pre>
+
+    <p class="prose">Verify before you record. The endpoint fails closed, and each response tells you exactly where you are:</p>
+    <div class="tbl-scroll">
+      <table class="cmp">
+        <thead><tr><th>What you get</th><th>What it means</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><th><code>503 remote_mcp_disabled</code></th><td>The server started without <code>MCP_BEARER_TOKEN</code> in its environment</td><td>Set the variable, then restart <code>npm start</code></td></tr>
+          <tr><th><code>401 unauthorized</code></th><td>Token reached the server but doesn&rsquo;t match</td><td>Re-copy it &mdash; no <code>Bearer</code> prefix in the field, no trailing newline</td></tr>
+          <tr><th>An ngrok HTML warning page</th><td>Free-tier browser interstitial, triggered by browser-like user agents</td><td>Harmless for the connector; if it does hit, upgrade or use the CLI take</td></tr>
+          <tr><th><code>ERR_NGROK_3200</code></th><td>Tunnel is up but nothing is listening on port 3000</td><td><code>npm start</code> is not running, or it took a different port</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn" style="margin-top:20px"><strong>Treat the tunnel as public.</strong> Anyone holding the URL and the token can drive the buyer side of your merchant. Keep both out of frame while recording, close the ngrok inspector at <code>localhost:4040</code> (it shows the token on every request), rotate the token after the shoot, and stop the tunnel when you are done.</div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Before you hit record</h2><span class="eyebrow">ticks are saved in this browser</span></div>
+    <ul class="prep" id="prep">
+      <li><label><input type="checkbox" data-id="p1"><span class="txt"><code>npm run seed</code> for clean data, then <code>npm start</code> in terminal 1 &mdash; minimise it</span></label></li>
+      <li><label><input type="checkbox" data-id="p2"><span class="txt">Terminal 2 empty and cleared, font size 16pt or larger</span></label></li>
+      <li><label><input type="checkbox" data-id="p3"><span class="txt">Browser tabs pre-opened at <code>/</code> and <code>/merchant</code>, zoom 110%</span></label></li>
+      <li><label><input type="checkbox" data-id="p4"><span class="txt">Full dry run on the CLI, then <code>npm run seed</code> again</span></label></li>
+      <li><label><input type="checkbox" data-id="p5"><span class="txt">One spare approved-but-unspent approval staged for Beat 7</span></label></li>
+      <li><label><input type="checkbox" data-id="p6"><span class="txt">ngrok tunnel up on the static domain, connector added, one test call made</span></label></li>
+      <li><label><input type="checkbox" data-id="p7"><span class="txt">Razorpay test-link budget checked &mdash; 30 per day, each live purchase burns one</span></label></li>
+      <li><label><input type="checkbox" data-id="p8"><span class="txt">ngrok inspector tab at <code>localhost:4040</code> closed &mdash; it shows the bearer token</span></label></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>The beats</h2><span class="eyebrow">say &middot; do &middot; screen</span></div>
+
+    <div class="beat">
+      <div class="rail"><div class="tc">0:00</div><div class="dur">18s</div><div class="num">Beat 1</div></div>
+      <div class="card">
+        <h3>The claim</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead"><code>/</code> landing page, hero visible.</p><p class="note">No cursor movement. Let the page be still while you talk.</p></div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>Most agentic commerce demos build the buyer &mdash; a chatbot that checks out. This is the other half: the merchant side, where the money actually moves.</p>
+          <p>The claim is one sentence. The language model never holds spending authority. It proposes. A deterministic gate verifies a signed mandate, and executes.</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="beat">
+      <div class="rail"><div class="tc">0:18</div><div class="dur">37s</div><div class="num">Beat 2</div></div>
+      <div class="card">
+        <h3>Attacks, live, on camera</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead">Same page, scrolled to the attack buttons.</p></div></div>
+        <div class="row"><span class="chip do">Do</span><div class="body">
+          <ol class="steps">
+            <li>Click <strong>Enlarge the cart after approval</strong> &mdash; wait for the refusal to render</li>
+            <li>Click <strong>Reprice between approval and completion</strong></li>
+            <li>Click <strong>Forge the approved amount</strong></li>
+          </ol>
+          <p class="note">Five of the eight are live buttons &mdash; 1, 3, 5, 6, 7. These three read most clearly on camera.</p>
+        </div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>These aren&rsquo;t screenshots. Each button runs a real attack against the live gate and prints whatever it actually says.</p>
+          <p>Add items after the human approved &mdash; refused, the cart hash moved. Change the price between approval and payment &mdash; refused. Forge the amount inside the mandate &mdash; refused, the signature doesn&rsquo;t verify.</p>
+          <p>Three of the eight aren&rsquo;t buttons here. They need a completed purchase first, and each one burns a Razorpay test-mode payment link. Rather than quietly show five and imply that&rsquo;s all of them, the page says which three are missing and why.</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="beat hold">
+      <div class="rail"><div class="tc">0:55</div><div class="dur">40s</div><div class="num">Beat 3</div></div>
+      <div class="card">
+        <h3>The buy, and the stall</h3>
+        <div class="row"><span class="chip do">Screen</span><div class="body"><p class="lead">Split frame &mdash; Claude on the left, terminal 2 on the right. Both legible.</p><p class="note">This is the shot the whole video exists for.</p></div></div>
+        <div class="row"><span class="chip do">Do</span><div class="body">
+          <pre>buy me a steel chai tumbler</pre>
+          <p class="note">Let the four tool calls land one at a time: search_catalog &rarr; start_checkout &rarr; get_quote &rarr; request_approval.</p>
+        </div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>Claude has six tools against this merchant. Search. Open a checkout. Lock a quote. Request approval. Check approval. Complete purchase.</p>
+          <p>It searches. It opens a checkout &mdash; and notice the price came from the merchant, not from Claude. It locks a quote. It requests approval.</p>
+          <p>And then it stops.</p>
+        </div></div>
+        <div class="hold-mark">Hold &mdash; two full seconds of silence on the pending message</div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>There is no seventh tool. Nothing in Claude&rsquo;s hands can sign consent. It&rsquo;s stuck, and it will stay stuck.</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="beat">
+      <div class="rail"><div class="tc">1:35</div><div class="dur">30s</div><div class="num">Beat 4</div></div>
+      <div class="card">
+        <h3>The signature</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead">Focus terminal 2, full frame if you can.</p></div></div>
+        <div class="row"><span class="chip do">Do</span><div class="body">
+          <pre>npm run approve                 <span class="c"># show the queue</span>
+npm run approve -- apr_xxxxxxxx <span class="c"># sign</span></pre>
+          <p class="note">Point the cursor at the line reading <code>mandates signed and attached to the approval</code>.</p>
+        </div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>This is my side. A separate process, on my machine, that the agent has no path to. It&rsquo;s standing in for a wallet app on your phone.</p>
+          <p>Four fifty-eight ninety-five, one steel tumbler. I approve it &mdash; and only now do two mandates get signed. An intent mandate: a spending limit, a category, one use. And a cart mandate, bound to this session, this quote, this exact cart hash, this exact amount.</p>
+        </div></div>
+        <div class="row"><span class="chip do">Do</span><div class="body"><p class="lead">Cut back to Claude. It polls, sees <code>approved</code>, calls <code>complete_purchase</code>. Completed.</p></div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>Claude was never able to create that. It can only spend it.</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="beat">
+      <div class="rail"><div class="tc">2:05</div><div class="dur">25s</div><div class="num">Beat 5</div></div>
+      <div class="card">
+        <h3>The receipt</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead"><code>/sessions/[id]</code> for the order you just placed.</p><p class="note">Scroll the twelve checks slowly enough to read two or three of them.</p></div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>Every decision behind that order. Twelve checks between the request and the charge. Mandate signature. Agent identity. Cart unchanged. Price unchanged. Quote still live. Amount within scope.</p>
+          <p>All of them deterministic. None of them the model choosing to behave.</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="beat">
+      <div class="rail"><div class="tc">2:30</div><div class="dur">15s</div><div class="num">Beat 6</div></div>
+      <div class="card">
+        <h3>The merchant&rsquo;s side</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead"><code>/merchant</code> &mdash; revenue and the agent-versus-human split.</p></div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>And the merchant&rsquo;s view &mdash; revenue, and how much of it came from agents rather than people. Same gate, same code path: a human buying on the storefront goes through exactly these checks.</p>
+        </div></div>
+        <div class="row"><span class="chip say">Note</span><div class="body"><p class="note">Say the words &ldquo;make a merchant transactable by an AI buyer&rdquo; here. It is the brief, verbatim.</p></div></div>
+      </div>
+    </div>
+
+    <div class="beat">
+      <div class="rail"><div class="tc">2:45</div><div class="dur">15s</div><div class="num">Beat 7</div></div>
+      <div class="card">
+        <h3>Taking it back</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead">Terminal 2.</p></div></div>
+        <div class="row"><span class="chip do">Do</span><div class="body">
+          <pre>npm run approve -- --revoke apr_yyyyyyyy</pre>
+          <p class="note">Then have the agent try <code>complete_purchase</code> on it. Refused.</p>
+        </div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>Consent I already granted, withdrawn. And revoking doesn&rsquo;t just set a flag someone has to remember to read &mdash; it consumes the mandate, so the gate refuses it by the same single-use rule that stops a replay.</p>
+          <p>An ordinary Razorpay merchant, transactable by an AI buyer. The agent can do everything except decide to spend my money.</p>
+        </div></div>
+        <div class="row"><span class="chip do">Do</span><div class="body"><p class="lead">Cut on the refusal. No outro card, no thank-you slide.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>If there&rsquo;s room for a longer cut</h2></div>
+    <ul class="notes">
+      <li><span class="tag">+30s</span><span><code>npm run attacks</code> &mdash; the full eight-refusal terminal sweep, scrolling</span></li>
+      <li><span class="tag">+20s</span><span><code>/shop</code> &mdash; a human buying through the identical gate</span></li>
+      <li><span class="tag">+15s</span><span><code>npm run verify-audit</code>, if it is demo-ready on the day</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Recording notes</h2></div>
+    <ul class="notes">
+      <li><span class="tag">Do</span><span>Terminal font 16pt or larger. Judges watch this on laptops.</span></li>
+      <li><span class="tag">Do</span><span>Move the mouse, <em>then</em> talk. Never both at once.</span></li>
+      <li><span class="tag">Do</span><span><code>npm run seed</code> after any failed take, or abandoned sessions pile into <code>/orders</code>.</span></li>
+      <li><span class="tag no">Don&rsquo;t</span><span>Narrate the file structure or read code aloud.</span></li>
+      <li><span class="tag no">Don&rsquo;t</span><span>Show <code>.well-known/jwks.json</code>. Nobody watching cares.</span></li>
+      <li><span class="tag no">Don&rsquo;t</span><span>Explain JWS mechanics. Say &ldquo;signed on the buyer&rsquo;s device&rdquo; and move on.</span></li>
+      <li><span class="tag no">Don&rsquo;t</span><span>Fake the Beat 3 pause. The real stall is the whole argument &mdash; let it be real.</span></li>
+      <li><span class="tag no">Don&rsquo;t</span><span>Say &ldquo;twelve checks&rdquo; over a screen that isn&rsquo;t showing them.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>Mandi &middot; Razorpay AI Buildathon, Track 01</span>
+    <span>7 beats &middot; 3:00 &middot; &#8377;458.95</span>
+  </footer>
+</div>
+
+<script>
+  (function(){
+    var root = document.documentElement;
+    var KEY_SIZE = 'mandi-ros-size';
+    var KEY_PREP = 'mandi-ros-prep';
+    var KEY_THEME = 'mandi-ros-theme';
+
+    function read(k, fallback){
+      try { var v = localStorage.getItem(k); return v === null ? fallback : v; }
+      catch (e) { return fallback; }
+    }
+    function write(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
+
+    var sizeBtn = document.getElementById('size-toggle');
+    function applySize(on){
+      root.setAttribute('data-size', on ? 'large' : 'normal');
+      sizeBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    applySize(read(KEY_SIZE, 'normal') === 'large');
+    sizeBtn.addEventListener('click', function(){
+      var on = sizeBtn.getAttribute('aria-pressed') !== 'true';
+      applySize(on);
+      write(KEY_SIZE, on ? 'large' : 'normal');
+    });
+
+    var savedTheme = read(KEY_THEME, '');
+    if (savedTheme === 'dark' || savedTheme === 'light') root.setAttribute('data-theme', savedTheme);
+
+    document.getElementById('theme-toggle').addEventListener('click', function(){
+      var current = root.getAttribute('data-theme');
+      var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (!current) current = systemDark ? 'dark' : 'light';
+      var next = current === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      write(KEY_THEME, next);
+    });
+
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('#prep input'));
+    var saved = {};
+    try { saved = JSON.parse(read(KEY_PREP, '{}')) || {}; } catch (e) { saved = {}; }
+
+    boxes.forEach(function(box){
+      box.checked = saved[box.dataset.id] === true;
+      box.addEventListener('change', function(){
+        saved[box.dataset.id] = box.checked;
+        write(KEY_PREP, JSON.stringify(saved));
+      });
+    });
+
+    document.getElementById('reset-prep').addEventListener('click', function(){
+      saved = {};
+      boxes.forEach(function(b){ b.checked = false; });
+      write(KEY_PREP, '{}');
+    });
+  })();
+</script>
+</body>
+</html>
