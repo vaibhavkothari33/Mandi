@@ -5,5 +5,6 @@ const rows = db().prepare('SELECT COUNT(*) AS n FROM audit_log').get() as { n: n
 const result = verifyChain()
 
 console.log(`audit entries: ${rows.n}`)
-console.log(result.ok ? 'chain intact' : `chain broken at seq ${result.brokenAt}`)
+console.log(`signed: ${result.signed}${result.unsigned ? ` (${result.unsigned} predate signing)` : ''}`)
+console.log(result.ok ? 'chain intact' : `chain broken at seq ${result.brokenAt}: ${result.reason}`)
 process.exit(result.ok ? 0 : 1)

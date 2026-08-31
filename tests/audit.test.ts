@@ -6,6 +6,7 @@ const ctx = freshDb()
 
 const { db } = await import('../lib/db/client.ts')
 const { append, forSession, verifyChain } = await import('../lib/audit.ts')
+const { ensureKeypair } = await import('../lib/mandate/keys.ts')
 
 after(async () => ctx.cleanup())
 
@@ -55,4 +56,76 @@ test('deleting an entry breaks the chain at the next row', () => {
   const result = verifyChain()
   assert.equal(result.ok, false)
   assert.equal(result.brokenAt, last.seq)
+})
+
+test('every entry carries an Ed25519 signature over its hash', () => {
+  db().prepare('DELETE FROM audit_log').run()
+
+  const entry = append({ sessionId: 'cs_5', actor: 'agent', action: 'gate.evaluate', decision: 'allow' })
+  const row = forSession('cs_5')[0]
+
+  assert.ok(entry.signature, 'append must return the signature it wrote')
+  assert.equal(row.signature, entry.signature)
+  assert.equal(row.kid, ensureKeypair().kid)
+
+  const verdict = verifyChain()
+  assert.equal(verdict.ok, true)
+  assert.equal(verdict.signed, 1)
+  assert.equal(verdict.unsigned, 0)
+})
+
+test('a rewritten entry re-hashed to look consistent is still caught by its signature', () => {
+  db().prepare('DELETE FROM audit_log').run()
+
+  append({ sessionId: 'cs_6', actor: 'agent', action: 'gate.evaluate', decision: 'refuse', reason: 'scope_exceeded' })
+
+  // An attacker with write access can recompute the hash chain: it needs no
+  // secret. Rewrite the row and its hash so the chain itself still validates.
+  const forged = append({ sessionId: 'cs_6', actor: 'agent', action: 'gate.evaluate', decision: 'allow' })
+  const good = db().prepare('SELECT hash, signature FROM audit_log WHERE seq = ?').get(forged.seq) as {
+    hash: string
+    signature: string
+  }
+  db().prepare('DELETE FROM audit_log').run()
+
+  const first = append({ sessionId: 'cs_6', actor: 'agent', action: 'gate.evaluate', decision: 'refuse', reason: 'scope_exceeded' })
+  db()
+    .prepare("UPDATE audit_log SET decision = 'allow', reason = NULL, hash = ?, signature = ? WHERE seq = ?")
+    .run(good.hash, good.signature, first.seq)
+
+  // The chain would accept it. The signature does not: it was made over a
+  // different hash, and forging one needs the merchant's private key.
+  const verdict = verifyChain()
+  assert.equal(verdict.ok, false)
+  assert.equal(verdict.brokenAt, first.seq)
+  assert.equal(verdict.reason, 'hash_mismatch')
+})
+
+test('an unsigned legacy row is reported as unsigned, not as tampered', () => {
+  db().prepare('DELETE FROM audit_log').run()
+
+  const entry = append({ sessionId: 'cs_7', actor: 'agent', action: 'a', decision: 'allow' })
+  db().prepare('UPDATE audit_log SET kid = NULL, signature = NULL WHERE seq = ?').run(entry.seq)
+
+  const verdict = verifyChain()
+  assert.equal(verdict.ok, true)
+  assert.equal(verdict.unsigned, 1)
+  assert.equal(verdict.signed, 0)
+})
+
+test('a signature lifted from another entry does not validate', () => {
+  db().prepare('DELETE FROM audit_log').run()
+
+  const first = append({ sessionId: 'cs_8', actor: 'agent', action: 'a', decision: 'allow' })
+  const second = append({ sessionId: 'cs_8', actor: 'agent', action: 'b', decision: 'refuse', reason: 'nope' })
+  const lifted = db().prepare('SELECT signature FROM audit_log WHERE seq = ?').get(first.seq) as {
+    signature: string
+  }
+
+  db().prepare('UPDATE audit_log SET signature = ? WHERE seq = ?').run(lifted.signature, second.seq)
+
+  const verdict = verifyChain()
+  assert.equal(verdict.ok, false)
+  assert.equal(verdict.brokenAt, second.seq)
+  assert.equal(verdict.reason, 'bad_signature')
 })

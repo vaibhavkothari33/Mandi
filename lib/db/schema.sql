@@ -124,6 +124,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail_json TEXT NOT NULL DEFAULT '{}',
   prev_hash   TEXT,
   hash        TEXT NOT NULL,
+  kid         TEXT,
+  signature   TEXT,
   at          TEXT NOT NULL
 );
 

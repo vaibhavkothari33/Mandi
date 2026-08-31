@@ -27,6 +27,14 @@ function migrate(handle: DatabaseSync): void {
   if (!sessions.some((c) => c.name === 'claim_token_hash')) {
     handle.exec('ALTER TABLE checkout_sessions ADD COLUMN claim_token_hash TEXT')
   }
+
+  // Entries written before the log was signed keep NULL kid/signature. The
+  // verifier reports them as unsigned rather than as tampered.
+  const audit = handle.prepare('PRAGMA table_info(audit_log)').all() as Array<{ name: string }>
+  if (!audit.some((c) => c.name === 'signature')) {
+    handle.exec('ALTER TABLE audit_log ADD COLUMN kid TEXT')
+    handle.exec('ALTER TABLE audit_log ADD COLUMN signature TEXT')
+  }
 }
 
 export function close(): void {

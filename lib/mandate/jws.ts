@@ -7,7 +7,7 @@ export const fromB64u = (input: string): Buffer => Buffer.from(input, 'base64url
 
 export interface JwsHeader {
   alg: 'EdDSA'
-  typ: 'mandate+jws'
+  typ: 'mandate+jws' | 'audit+jws'
   kid: string
 }
 
