@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { ADDRESS, AgentClient } from '../harness/client.ts'
 import { cartHash, setPrice } from '../lib/catalog.ts'
+import { gateAllowed } from '../lib/http.ts'
 import { issueCart, issueIntent } from '../lib/mandate/issue.ts'
 
 const client = new AgentClient()
@@ -107,8 +108,14 @@ const paid = await client.post(`/api/checkout_sessions/${id}/complete`, {
   intent_mandate: intent.jws,
   cart_mandate: cart.jws,
 })
-check('authorized and captured', paid.status === 200, paid.json)
-check('session completed', paid.json?.status === 'completed', paid.json?.status)
+check('gate authorized the charge', gateAllowed(paid.status), paid.json)
+
+// With the stub executor the capture is observed inline and the session
+// completes. Against real Razorpay keys nothing is captured here — the order is
+// only an instruction — so the session correctly waits at `pending_payment`
+// for the signed webhook.
+const expectedStatus = paid.status === 200 ? 'completed' : 'pending_payment'
+check(`session ${expectedStatus}`, paid.json?.status === expectedStatus, paid.json?.status)
 check('payment reference returned', typeof paid.json?.payment?.reference === 'string')
 check('all gate checks passed', paid.json?.checks?.every((c: any) => c.passed) === true)
 

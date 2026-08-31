@@ -1,3 +1,4 @@
+import { gateAllowed } from '../lib/http.ts'
 import { formatInr } from '../lib/money.ts'
 import * as wallet from '../lib/wallet.ts'
 import { ADDRESS, AgentClient } from './client.ts'
@@ -54,12 +55,12 @@ const paid = await client.post(`/api/checkout_sessions/${id}/complete`, {
   cart_mandate: decided.cart_jws,
 })
 
-if (paid.status !== 200) {
+if (!gateAllowed(paid.status)) {
   console.log(`   refused: ${paid.json?.error?.code} — ${paid.json?.error?.message}`)
   process.exit(1)
 }
 
-console.log(`   ${paid.json.status}`)
+console.log(`   ${paid.json.status}${paid.status === 202 ? ' — awaiting the provider capture webhook' : ''}`)
 console.log(`   payment ${paid.json.payment.reference} for ${formatInr(paid.json.payment.amount_paise)}`)
 
 step(8, 'the gate checks that were evaluated')

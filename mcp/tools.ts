@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { AgentClient, ADDRESS } from '../harness/client.ts'
+import { gateAllowed } from '../lib/http.ts'
 import { formatInr } from '../lib/money.ts'
 import * as wallet from '../lib/wallet.ts'
 
@@ -176,7 +177,7 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
       cart_mandate: approval.cart_jws,
     })
 
-    if (reply.status !== 200) {
+    if (!gateAllowed(reply.status)) {
       const failed = (reply.json?.checks as any[])?.filter((c) => !c.passed) ?? []
       return text(
         [
@@ -187,11 +188,22 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
       )
     }
 
+    const captured = reply.status === 200
+
     return text(
       [
-        `Purchase complete. Session ${reply.json.id} is ${reply.json.status}.`,
+        captured
+          ? `Purchase complete. Session ${reply.json.id} is ${reply.json.status}.`
+          : `Payment authorized, not captured yet. Session ${reply.json.id} is ${reply.json.status}.`,
         `  payment ${reply.json.payment.reference} for ${formatInr(reply.json.payment.amount_paise)}`,
         `  ${(reply.json.checks as any[]).length} gate checks passed`,
+        ...(captured
+          ? []
+          : [
+              '  The provider holds the instruction but has not confirmed the money moved.',
+              '  Do not retry: the mandate is spent. The session completes when the',
+              "  provider's signed capture webhook arrives.",
+            ]),
       ].join('\n'),
     )
   },

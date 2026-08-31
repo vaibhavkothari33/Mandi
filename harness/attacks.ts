@@ -1,4 +1,5 @@
 import { cartHash, setPrice, setStock } from '../lib/catalog.ts'
+import { gateAllowed } from '../lib/http.ts'
 import { db } from '../lib/db/client.ts'
 import { issueCart } from '../lib/mandate/issue.ts'
 import * as mandates from '../lib/mandate/store.ts'
@@ -70,7 +71,7 @@ async function completeForSetup(
 ): Promise<{ ok: boolean; detail: string }> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const reply = await complete(client, id, intent, cart)
-    if (reply.status === 200) return { ok: true, detail: '' }
+    if (gateAllowed(reply.status)) return { ok: true, detail: '' }
 
     const code = reply.json?.error?.code ?? `http_${reply.status}`
     const transient = code === 'payment_failed' || code === 'payment_indeterminate'
@@ -84,8 +85,8 @@ async function completeForSetup(
 }
 
 const outcome = (reply: { status: number; json: any }): AttackOutcome => ({
-  refused: reply.status !== 200,
-  code: reply.json?.error?.code ?? (reply.status === 200 ? 'ALLOWED' : `http_${reply.status}`),
+  refused: !gateAllowed(reply.status),
+  code: reply.json?.error?.code ?? (gateAllowed(reply.status) ? 'ALLOWED' : `http_${reply.status}`),
   detail: reply.json?.error?.message ?? '',
 })
 
@@ -220,9 +221,9 @@ export const ATTACKS: Attack[] = [
         complete(client, s.id, s.approval.intent_jws, s.approval.cart_jws),
       ])
 
-      const succeeded = [a, b].filter((r) => r.status === 200).length
+      const succeeded = [a, b].filter((r) => gateAllowed(r.status)).length
       const live = paymentsForSession(s.id).filter((p) => p.status !== 'failed').length
-      const loser = [a, b].find((r) => r.status !== 200)
+      const loser = [a, b].find((r) => !gateAllowed(r.status))
       const detail = `${succeeded} of 2 completed, ${live} live payment(s)`
 
       // Only more than one is a breach. Zero means neither request got through,
