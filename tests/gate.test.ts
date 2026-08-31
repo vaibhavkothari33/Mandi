@@ -38,6 +38,7 @@ const fixedExecutor = (result: PaymentResult): PaymentExecutor => ({
 
 const failing = fixedExecutor({
   outcome: 'failed',
+  captured: false,
   reference: null,
   providerOrderId: 'order_x',
   message: 'issuer declined',
@@ -45,9 +46,19 @@ const failing = fixedExecutor({
 
 const indeterminate = fixedExecutor({
   outcome: 'unknown',
+  captured: false,
   reference: null,
   providerOrderId: null,
   message: 'gateway timed out',
+})
+
+/** A provider that accepts the instruction but confirms no capture. */
+const uncaptured = fixedExecutor({
+  outcome: 'succeeded',
+  captured: false,
+  reference: 'plink_x',
+  providerOrderId: 'order_y',
+  message: 'payment link created',
 })
 
 /** Builds a payable session plus a matching intent and cart mandate. */
@@ -246,10 +257,39 @@ test('an indeterminate payment holds the mandate and the session for reconciliat
   assert.equal(result.status, 409)
   assert.ok(mandates.byJti(s.cart.payload.jti)?.consumed_at, 'mandate must stay consumed')
   assert.equal(payments.forSession(s.session.id)[0].status, 'pending')
-  assert.equal(store.get(s.session.id).status, 'ready_for_payment')
+  assert.equal(store.get(s.session.id).status, 'pending_payment')
 
-  // The held payment blocks any further attempt until a human reconciles it.
-  assert.equal(evaluate(request(s)).code, 'payment_already_exists')
+  // A session held for reconciliation is not payable again.
+  assert.equal(evaluate(request(s)).code, 'session_not_payable')
+})
+
+test('an accepted but uncaptured payment leaves the session pending, not completed', async () => {
+  const s = scenario()
+  const result = await authorize(request(s), uncaptured, key())
+
+  assert.equal(result.status, 202)
+  assert.equal(store.get(s.session.id).status, 'pending_payment')
+  assert.equal(payments.forSession(s.session.id)[0].status, 'authorized')
+
+  // The mandate is spent: the instruction is out with the provider.
+  assert.ok(mandates.byJti(s.cart.payload.jti)?.consumed_at)
+
+  // And nothing can charge the session a second time while capture is open.
+  assert.equal(evaluate(request(s)).code, 'session_not_payable')
+})
+
+test('a pending session refuses cart edits', async () => {
+  const s = scenario()
+  await authorize(request(s), uncaptured, key())
+
+  const current = store.get(s.session.id)
+  assert.throws(
+    () =>
+      store.update(current.id, current.version, {
+        items: store.resolveItems([{ product_id: 'sku_chai', quantity: 2 }]),
+      }),
+    /session_locked|pending_payment/,
+  )
 })
 
 test('drawdown accumulates across purchases on one intent', async () => {

@@ -1,10 +1,9 @@
 import { append } from './audit.ts'
 import { cartHash, getProduct } from './catalog.ts'
-import { db } from './db/client.ts'
 import { formatInr } from './money.ts'
 import { checkCartWithinIntent } from './mandate/scope.ts'
 import { detectDrift, find as findQuote, isExpired, secondsRemaining } from './quote.ts'
-import { consume, drawdown, usageCount } from './mandate/store.ts'
+import { consume, drawdown, release as releaseMandate, usageCount } from './mandate/store.ts'
 import type { CartPayload, IntentPayload } from './mandate/types.ts'
 import { verifyCart, verifyIntent } from './mandate/verify.ts'
 import type { PaymentExecutor } from './pay/executor.ts'
@@ -175,11 +174,6 @@ export interface AuthorizeResult {
   body: unknown
 }
 
-/** Only a definitively failed payment releases the mandate. */
-function releaseMandate(jti: string): void {
-  db().prepare('UPDATE mandates SET consumed_at = NULL WHERE id = ?').run(jti)
-}
-
 /**
  * Consumption happens before the provider is called, not after. If the process
  * dies mid-flight, a burnt mandate costs the buyer a re-consent; the reverse
@@ -241,6 +235,20 @@ export async function authorize(
 
   const payment = reserve(session.id, cart.amount_paise, cart.currency)
 
+  // The session moves to `pending_payment` before the provider is called. If
+  // this process dies mid-flight the session reads as in-flight rather than
+  // payable, so nothing can start a second charge against it.
+  const pending = updateSession(session.id, session.version, { status: 'pending_payment' })
+
+  append({
+    sessionId: session.id,
+    actor: request.callerAgentId,
+    action: 'payment.authorize',
+    decision: 'info',
+    reason: 'pending_payment',
+    detail: { payment: payment.id, amount_paise: cart.amount_paise, executor: executor.name },
+  })
+
   const result = await executor.execute({
     sessionId: session.id,
     amountPaise: cart.amount_paise,
@@ -249,9 +257,12 @@ export async function authorize(
     description: `Mandi order ${session.id}`,
   })
 
-  if (result.outcome === 'succeeded') {
+  // Only a confirmed capture completes a session. An accepted instruction that
+  // has taken no money yet is reported as such and left pending; the signed
+  // provider webhook is what finishes it.
+  if (result.outcome === 'succeeded' && result.captured) {
     settle(payment.id, 'captured', { reference: result.reference, providerOrderId: result.providerOrderId })
-    const completed = updateSession(session.id, session.version, { status: 'completed' })
+    const completed = updateSession(pending.id, pending.version, { status: 'completed' })
 
     append({
       sessionId: session.id,
@@ -283,6 +294,47 @@ export async function authorize(
           reference: result.reference,
           amount_paise: cart.amount_paise,
           currency: cart.currency,
+          status: 'captured',
+        },
+        mandate: { intent: intent.jti, cart: cart.jti },
+        checks: decision.checks,
+      },
+    }
+  }
+
+  if (result.outcome === 'succeeded') {
+    settle(payment.id, 'authorized', { reference: result.reference, providerOrderId: result.providerOrderId })
+
+    append({
+      sessionId: session.id,
+      actor: request.callerAgentId,
+      action: 'payment.authorize',
+      decision: 'info',
+      reason: 'awaiting_capture',
+      detail: {
+        payment: payment.id,
+        reference: result.reference,
+        provider_order_id: result.providerOrderId,
+        amount_paise: cart.amount_paise,
+        executor: executor.name,
+        message: result.message,
+      },
+    })
+
+    return {
+      decision,
+      status: 202,
+      body: {
+        id: pending.id,
+        status: pending.status,
+        payment: {
+          id: payment.id,
+          reference: result.reference,
+          provider_order_id: result.providerOrderId,
+          amount_paise: cart.amount_paise,
+          currency: cart.currency,
+          status: 'authorized',
+          detail: result.message,
         },
         mandate: { intent: intent.jti, cart: cart.jti },
         checks: decision.checks,
@@ -293,6 +345,7 @@ export async function authorize(
   if (result.outcome === 'failed') {
     settle(payment.id, 'failed', { providerOrderId: result.providerOrderId })
     releaseMandate(cart.jti)
+    updateSession(pending.id, pending.version, { status: 'ready_for_payment' })
 
     append({
       sessionId: session.id,
@@ -311,7 +364,8 @@ export async function authorize(
   }
 
   // Reconciliation needs the provider's handle precisely when the outcome is
-  // unknown, so persist whatever identifiers came back before holding.
+  // unknown, so persist whatever identifiers came back before holding. The
+  // session stays at `pending_payment`; the mandate stays burnt.
   settle(payment.id, 'pending', { providerOrderId: result.providerOrderId })
 
   append({
@@ -339,6 +393,7 @@ export async function authorize(
         message: 'payment outcome could not be established; the session is held for reconciliation',
       },
       payment: { id: payment.id, status: 'pending' },
+      session: { id: pending.id, status: pending.status },
     },
   }
 }

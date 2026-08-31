@@ -59,6 +59,15 @@ export function consume(jti: string): boolean {
   return result.changes === 1
 }
 
+/**
+ * Undoes a consumption. Only a definitively failed payment may call this: an
+ * indeterminate outcome must leave the mandate burnt, because releasing one
+ * against a charge that did land would permit a second.
+ */
+export function release(jti: string): void {
+  db().prepare('UPDATE mandates SET consumed_at = NULL WHERE id = ?').run(jti)
+}
+
 /** Total already drawn against an intent by consumed cart mandates. */
 export function drawdown(intentJti: string): number {
   const row = db()

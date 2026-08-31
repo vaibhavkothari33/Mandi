@@ -23,6 +23,14 @@ const TYPE_BY_STATUS: Record<number, string> = {
   501: 'not_implemented',
 }
 
+/**
+ * The gate lets a charge through with 200 when the provider confirmed capture
+ * and 202 when it only accepted the instruction. Both mean "authorized"; only
+ * the second leaves the session at `pending_payment`. Callers deciding whether
+ * money was permitted to move must accept either.
+ */
+export const gateAllowed = (status: number): boolean => status === 200 || status === 202
+
 export function errorResponse(err: unknown, requestId?: string): Response {
   const e =
     err instanceof ApiError ? err : new ApiError(500, 'internal_error', 'Unexpected server error')
