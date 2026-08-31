@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { registerTools } from '@/mcp/tools'
+import { configured as oauthConfigured, issuer, resourceUrl, verifyAccessToken } from '@/lib/mcp/oauth'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,17 +18,17 @@ export const dynamic = 'force-dynamic'
  */
 function authorized(request: Request): boolean {
   const expected = process.env.MCP_BEARER_TOKEN
-  if (!expected) return false
-
   const presented = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''
-  const a = Buffer.from(expected, 'utf8')
-  const b = Buffer.from(presented, 'utf8')
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
+  if (expected) {
+    const a = Buffer.from(expected, 'utf8')
+    const b = Buffer.from(presented, 'utf8')
+    if (a.length === b.length && timingSafeEqual(a, b)) return true
+  }
+  return oauthConfigured() && verifyAccessToken(presented, resourceUrl(request))
 }
 
-function refuse(): Response {
-  const configured = Boolean(process.env.MCP_BEARER_TOKEN)
+function refuse(request: Request): Response {
+  const configured = Boolean(process.env.MCP_BEARER_TOKEN) || oauthConfigured()
 
   return Response.json(
     {
@@ -38,13 +39,13 @@ function refuse(): Response {
           : 'set MCP_BEARER_TOKEN to enable the remote MCP endpoint',
       },
     },
-    { status: configured ? 401 : 503, headers: { 'WWW-Authenticate': 'Bearer' } },
+    { status: configured ? 401 : 503, headers: { 'WWW-Authenticate': `Bearer resource_metadata="${issuer(request)}/.well-known/oauth-protected-resource/api/mcp", scope="mandi.tools"` } },
   )
 }
 
 /** Stateless: a fresh server and transport per request, so no state is pinned to one instance. */
 async function handle(request: Request): Promise<Response> {
-  if (!authorized(request)) return refuse()
+  if (!authorized(request)) return refuse(request)
 
   const server = registerTools(new McpServer({ name: 'mandi-buyer', version: '0.1.0' }))
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
