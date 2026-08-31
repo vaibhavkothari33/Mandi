@@ -9,6 +9,7 @@ import type { CartPayload, IntentPayload } from './mandate/types.ts'
 import { verifyCart, verifyIntent } from './mandate/verify.ts'
 import type { PaymentExecutor } from './pay/executor.ts'
 import { forSession as paymentsForSession, reserve, settle } from './pay/store.ts'
+import { sendPurchaseReceipt } from './receipt.ts'
 import { get as getSession, update as updateSession, type Session } from './session/store.ts'
 
 export interface Check {
@@ -264,6 +265,12 @@ export async function authorize(
         executor: executor.name,
       },
     })
+
+    void sendPurchaseReceipt({
+      session: completed,
+      paymentReference: result.reference,
+      amountPaise: cart.amount_paise,
+    }).catch((err) => console.error('Purchase receipt email failed', err))
 
     return {
       decision,
