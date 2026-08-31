@@ -4,7 +4,14 @@ import { priceCart, type Totals } from '../pricing.ts'
 import { LIMITS, MERCHANT } from '../config.ts'
 import { ApiError } from '../http.ts'
 import { sessionId } from '../ids.ts'
-import { deriveStatus, isTerminal, type Fulfillment, type SessionStatus } from './machine.ts'
+import {
+  canTransition,
+  deriveStatus,
+  isLocked,
+  isTerminal,
+  type Fulfillment,
+  type SessionStatus,
+} from './machine.ts'
 
 export interface SessionRow {
   id: string
@@ -147,9 +154,25 @@ export function update(
     throw new ApiError(409, 'session_terminal', `session is ${current.status} and cannot be modified`)
   }
 
+  // A charge in flight freezes the cart. Only the status itself may still move,
+  // and only along an edge the machine allows.
+  const editsCart = patch.items !== undefined || patch.fulfillment !== undefined
+  if (isLocked(current.status) && editsCart) {
+    throw new ApiError(409, 'session_locked', `session is ${current.status} and cannot be modified`)
+  }
+
   const items = patch.items ?? current.items
   const fulfillment = patch.fulfillment === undefined ? current.fulfillment : patch.fulfillment
   const status = patch.status ?? deriveStatus(current.status, items, fulfillment)
+
+  if (!canTransition(current.status, status)) {
+    throw new ApiError(
+      409,
+      'invalid_transition',
+      `a session cannot move from ${current.status} to ${status}`,
+    )
+  }
+
   const totals = priceCart(items)
   const quoteId = patch.quoteId === undefined ? current.quoteId : patch.quoteId
 
