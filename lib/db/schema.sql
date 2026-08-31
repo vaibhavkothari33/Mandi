@@ -139,3 +139,11 @@ CREATE TABLE IF NOT EXISTS attack_results (
   detail        TEXT    NOT NULL DEFAULT '',
   ran_at        TEXT    NOT NULL
 );
+
+-- Dynamic OAuth client registrations for the remote MCP connector.
+CREATE TABLE IF NOT EXISTS oauth_clients (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  redirect_uris TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
