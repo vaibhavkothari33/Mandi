@@ -19,6 +19,18 @@ const COOLDOWN_MS = 1500
 let inFlight = 0
 const MAX_IN_FLIGHT = 4
 
+/**
+ * The attack runner calls this same app several times. When development is
+ * exposed through a tunnel, sending those calls back through the public URL
+ * makes the test depend on the tunnel recursively. Use loopback in dev; a
+ * deployed multi-instance app can explicitly supply its private origin.
+ */
+function internalBase(request: Request): string {
+  if (process.env.INTERNAL_BASE_URL) return process.env.INTERNAL_BASE_URL
+  if (process.env.NODE_ENV !== 'production') return `http://127.0.0.1:${process.env.PORT ?? 3000}`
+  return new URL(request.url).origin
+}
+
 function throttle(request: Request): void {
   const who =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
@@ -61,7 +73,7 @@ export async function POST(request: Request) {
 
     inFlight += 1
     try {
-      const result = await attack.run(new AgentClient({ base: new URL(request.url).origin }))
+      const result = await attack.run(new AgentClient({ base: internalBase(request) }))
 
       return Response.json({
         id: attack.id,
@@ -78,6 +90,9 @@ export async function POST(request: Request) {
       resetCatalog()
     }
   } catch (err) {
+    // Preserve the safe client response while leaving the actual failure in
+    // the server log for diagnosis.
+    console.error('Try-it attack failed', err)
     return errorResponse(err)
   }
 }
