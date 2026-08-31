@@ -32,9 +32,14 @@ export function reserve(sessionId: string, amountPaise: Paise, currency: string)
   }
 }
 
+/**
+ * `authorized` is an accepted instruction awaiting capture. It is deliberately
+ * not `failed`, so the partial unique index keeps holding the session's single
+ * payment slot while the provider webhook is outstanding.
+ */
 export function settle(
   id: string,
-  status: 'captured' | 'failed' | 'pending',
+  status: 'captured' | 'authorized' | 'failed' | 'pending',
   refs: { reference?: string | null; providerOrderId?: string | null } = {},
 ): void {
   db()

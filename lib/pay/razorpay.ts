@@ -36,9 +36,11 @@ export class RazorpayExecutor implements PaymentExecutor {
    * the instruction was accepted. So a refused link no longer fails the
    * payment; the order stands and its id becomes the reference.
    *
-   * Test mode has no payer, so no capture event can occur here. `succeeded`
-   * means the provider accepted the instruction and issued real identifiers;
-   * the webhook route is what moves a payment to captured in a live flow.
+   * Nothing here is a capture. Creating an order — with or without a link —
+   * only registers an instruction; the payer has not paid. So every success
+   * path reports `captured: false`, which holds the session at
+   * `pending_payment`. The signed `payment.captured` webhook is the only thing
+   * that completes a sale.
    *
    * UPI payment links are rejected outright in test mode, so a standard link
    * is used; the UPI rail is a live-mode concern.
@@ -67,6 +69,7 @@ export class RazorpayExecutor implements PaymentExecutor {
       if (!response.ok || !payload.id) {
         return {
           outcome: 'failed',
+          captured: false,
           reference: null,
           providerOrderId: null,
           message: payload.error?.description ?? `order rejected with ${response.status}`,
@@ -101,6 +104,7 @@ export class RazorpayExecutor implements PaymentExecutor {
       if (!response.ok || !payload.id) {
         return {
           outcome: 'succeeded',
+          captured: false,
           reference: order.id,
           providerOrderId: order.id,
           message: `order created; no payment link (${payload.error?.description ?? response.status})`,
@@ -109,6 +113,7 @@ export class RazorpayExecutor implements PaymentExecutor {
 
       return {
         outcome: 'succeeded',
+        captured: false,
         reference: payload.id,
         providerOrderId: order.id,
         message: payload.short_url ?? 'payment link created',
@@ -118,6 +123,7 @@ export class RazorpayExecutor implements PaymentExecutor {
       // undo it, and no money can move either way in test mode.
       return {
         outcome: 'succeeded',
+        captured: false,
         reference: order.id,
         providerOrderId: order.id,
         message: 'order created; payment link unavailable',
@@ -126,6 +132,6 @@ export class RazorpayExecutor implements PaymentExecutor {
   }
 
   private indeterminate(orderId: string | null, message: string): PaymentResult {
-    return { outcome: 'unknown', reference: null, providerOrderId: orderId, message }
+    return { outcome: 'unknown', captured: false, reference: null, providerOrderId: orderId, message }
   }
 }
