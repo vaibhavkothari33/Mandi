@@ -63,7 +63,7 @@ Open <http://localhost:3000>. Three views worth a look:
 | `npm run buyer` | An honest buyer agent walks the full flow |
 | `npm run attacks` | The adversarial suite — exits non-zero on any breach |
 | `npm run smoke` | Protocol-level checks against a running merchant |
-| `npm test` | 99 unit tests |
+| `npm test` | 109 unit tests |
 | `npm run approve` | The human wallet: list, approve, deny or revoke consent |
 | `npm run mcp:demo` | Drives the MCP server, showing the agent blocked at consent |
 
@@ -83,8 +83,27 @@ Open <http://localhost:3000>. Three views worth a look:
                                                          │
                                                          ▼
                                               Razorpay test-mode payment
-       └────────────── hash-chained, append-only audit log ──────────────┘
+       └───────── hash-chained, Ed25519-signed, append-only audit log ─────────┘
 ```
+
+### The five session states
+
+```
+not_ready_for_payment ──► ready_for_payment ──► pending_payment ──► completed
+         ▲                        │                    │
+         └────────────────────────┘                    │ declined
+            cart or address edited                     ▼
+                                                ready_for_payment
+```
+
+`pending_payment` is the window between authorising a charge and knowing it landed: the mandate
+is spent, the provider holds the instruction, and nobody yet knows whether money moved. The
+session enters it *before* the provider is called, so a process that dies mid-flight leaves a
+session that reads as in-flight rather than as payable.
+
+`completed` has exactly one predecessor, and the machine is enforced in `update()` rather than
+merely documented — there is no path that declares a sale without first declaring that an
+instruction went out.
 
 ### The mandate chain
 
@@ -181,20 +200,50 @@ Claude.ai reaches connectors from Anthropic's infrastructure, not from your mach
 stdio server is unreachable there. The same six tools are also served over HTTP at `/api/mcp`
 for that case.
 
-The endpoint can create payment instructions, so it fails closed: without `MCP_BEARER_TOKEN`
-it returns `503 remote_mcp_disabled`, and with one set it requires `Authorization: Bearer`.
+The endpoint can create payment instructions, so it fails closed. Claude.ai custom connectors
+use OAuth: configure the two OAuth secrets below, then use the full `/api/mcp` URL in Claude.
+When Claude opens the approval page, enter `MCP_OAUTH_APPROVAL_TOKEN`. The access token Claude
+receives is valid for one hour. `MCP_BEARER_TOKEN` remains available for clients that can send a
+pre-shared `Authorization: Bearer` header, such as the MCP Inspector.
 
 ```bash
-# 1. set a long random token in .env, then restart
-MCP_BEARER_TOKEN=$(openssl rand -hex 32)
+# 1. set two long random secrets in .env, then restart
+MCP_OAUTH_APPROVAL_TOKEN=$(openssl rand -hex 32)
+MCP_OAUTH_SIGNING_SECRET=$(openssl rand -hex 32)
+MCP_PUBLIC_BASE_URL=https://your-public-tunnel.example
 
 # 2. expose it over HTTPS — Claude cannot reach localhost
-cloudflared tunnel --url http://localhost:3000
+ngrok http --url your-reserved-domain.ngrok-free.dev 3000
 ```
 
+Use a *reserved* domain. With an ephemeral tunnel the URL changes on every restart, and both
+the Claude connector and the Razorpay webhook have to be re-registered each time —
+`MCP_PUBLIC_BASE_URL` and `PUBLIC_BASE_URL` must match it exactly, or discovery hands Claude a
+dead host.
+
 Add the printed `https://…/api/mcp` URL as a custom connector in Claude's settings, with the
-bearer token. Treat the tunnel as public: anyone holding the URL and token can drive the buyer
-tools, which is why the token is required and why this stays on test-mode keys.
+approval token during the browser authorization page. Do not add a Client ID or secret in
+Claude: it dynamically registers with this server. Treat the tunnel as public: anyone holding
+the URL and approval token can drive the buyer tools, so keep this on test-mode keys.
+
+### The webhook is not optional against real Razorpay keys
+
+Creating a Razorpay order is an instruction, not a capture — nobody has paid yet. So with real
+test-mode keys the gate answers `202` and parks the session at `pending_payment`; only a signed
+`payment.captured` webhook completes it and sends the receipt. Set `RAZORPAY_WEBHOOK_SECRET` to
+the endpoint secret from the Razorpay dashboard and point the endpoint at
+`https://…/api/webhooks/razorpay`. Without it that route returns `503` and sessions stay pending
+by design.
+
+With no Razorpay keys the stub executor runs, observes its own capture, and completes inline —
+which is why the test suite and `npm run smoke` need no network.
+
+### Optional purchase receipt email
+
+After a successful purchase, Mandi can email an itemized receipt. Set `RESEND_API_KEY` and,
+if needed, `RESEND_FROM` (a Resend-verified sender) in `.env`. Leaving them unset keeps
+checkout working normally and sends no email. For the demo, receipts default to Vaibhav Kothari
+at `vaibhavkothari50@gmail.com`; use `RECEIPT_TO_EMAIL` and `RECEIPT_TO_NAME` to override it.
 
 ### The six tools, and the one that is missing
 
@@ -238,7 +287,7 @@ Stated plainly, because a payments panel will ask.
 | UPI Reserve Pay | **Modelled**, not integrated. Drawdown behaves like a reserve; the NPCI rail is not available in test mode |
 | Razorpay orders | **Real** test-mode API calls with real `order_…` identifiers |
 | Razorpay payment links | Best-effort. Test mode caps them at thirty per account, so a refused link leaves the order standing rather than failing the payment |
-| Payment capture | **Not real.** Test mode has no payer, so no capture event can occur. `succeeded` means the provider accepted the instruction. The signed webhook route handles the capture transition for a live flow |
+| Payment capture | **Not real in test mode.** No payer exists, so no capture event occurs. Accepting an order is an instruction, not money, so the gate answers `202` and parks the session at `pending_payment`. Only a signature-verified `payment.captured` webhook completes it |
 | Catalogue | Seeded, not a real merchant's inventory |
 | Mandate private key | Held locally, because Mandi also plays the issuer for the demo. In production it belongs to the buyer's wallet — the merchant path only ever reads the public half |
 
@@ -260,7 +309,7 @@ lib/
   quote.ts                price locking and drift detection
   pay/                    executor interface, Razorpay, stub
   wallet.ts               buyer-side signing — not reachable from the merchant API
-  audit.ts                hash-chained append-only log
+  audit.ts                hash-chained, Ed25519-signed append-only log
 harness/
   client.ts               signed agent client, able to forge bad requests
   buyer.ts                an honest agent

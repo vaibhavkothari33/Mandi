@@ -154,16 +154,49 @@ display edge. GST is rounded once at order level rather than per line, so totals
 buyer one re-consent. The reverse ordering risks charging them twice. Recoverable beats
 unrecoverable.
 
+**Accepting an instruction is not capturing a payment.** Creating a Razorpay order, with or
+without a payment link, registers an intention to collect; the payer has not paid. A system that
+calls that "completed" is reporting revenue it does not have. So a payment result carries two
+independent facts: `outcome`, whether the provider accepted the instruction, and `captured`,
+whether the merchant has confirmation that money moved. Only the second may complete a session.
+
+The stub executor is its own rail and observes its own capture, so it reports `captured: true`
+and completes inline. The Razorpay executor reports `captured: false` on every success path; the
+signed `payment.captured` webhook is the only thing that finishes a real sale.
+
 **`failed` and `unknown` are different outcomes.** Most implementations collapse them into
 "didn't work". Collapsing them is how you double-charge someone.
 
 | Outcome | Mandate | Session | Reasoning |
 |---|---|---|---|
-| `succeeded` | consumed | completed | — |
+| `succeeded`, captured | consumed | completed | Money confirmed moved |
+| `succeeded`, not captured | consumed | **pending_payment** | Instruction is out; retrying it is the double-charge |
 | `failed` — a definitive decline | **released** | payable again | Certain no money moved, so retry is safe |
-| `unknown` — a timeout | **held** | frozen | Money *may* have moved. Releasing here is the double-charge |
+| `unknown` — a timeout | **held** | **pending_payment** | Money *may* have moved. Releasing here is the double-charge |
 
 An indeterminate payment blocks every further attempt until a human reconciles it.
+
+### The five session states
+
+```
+not_ready_for_payment ──► ready_for_payment ──► pending_payment ──► completed
+         ▲                        │                    │
+         └────────────────────────┘                    │  a definitive decline
+                  (cart or address edited)             ▼
+                                                ready_for_payment
+
+  any non-terminal state ──► canceled
+```
+
+`pending_payment` is the honest name for the window every real payment has and most demos
+pretend away: the mandate is spent, the provider holds the instruction, and nobody yet knows
+whether the money moved. The session enters it *before* the provider is called, so a process
+that dies mid-flight leaves a session that reads as in-flight rather than as payable.
+
+The machine is enforced, not documented: `update()` rejects any status change that is not an
+allowed edge, and `completed` has exactly one predecessor. There is no path that declares a sale
+without first declaring that an instruction went out. A locked session also refuses cart edits,
+so a charge in flight cannot have its basket changed underneath it.
 
 **The database is the last line of defence.** A partial unique index —
 `ON payments(session_id) WHERE status != 'failed'` — permits at most one live payment per
@@ -177,12 +210,26 @@ Append-only is a claim unless it can be checked. Each entry hashes the previous 
 so the log is a chain:
 
 ```
-entry.hash = sha256(canonical({ prevHash, session, actor, action, decision, reason, detail, at }))
+entry.hash  = sha256(canonical({ prevHash, session, actor, action, decision, reason, detail, at }))
+entry.sig   = Ed25519(merchant_key, entry.hash)
 ```
 
 `verifyChain()` replays it and names the first row that fails. Flip a `refuse` to an `allow`
 directly in the database and it is caught; delete a row and the chain breaks at the *next* one.
 Both are tested in `tests/audit.test.ts`.
+
+**The hash chain alone proves ordering, not authorship.** It uses no secret, so anyone who can
+write the table can rewrite a row *and* recompute every hash after it, producing a log that
+verifies perfectly. That is why each entry is also signed with the merchant's Ed25519 key over
+its hash — the same key that signs mandates, published at `/.well-known/jwks.json`. Forging an
+entry now requires the private key, not merely database access. `tests/audit.test.ts` includes
+exactly that attack: a row rewritten and re-chained so the chain accepts it, caught by the
+signature.
+
+The signature is detached and covers the hash alone, which already commits to every field and
+to the predecessor. Entries written before signing existed keep a null signature and are
+reported as `unsigned` rather than as tampered — the verdict distinguishes "not attributable"
+from "altered".
 
 Canonical JSON — keys sorted at every depth — makes the hash reproducible regardless of key
 insertion order.
