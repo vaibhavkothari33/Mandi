@@ -250,8 +250,12 @@ export default async function Home() {
                 chain.ok ? 'text-emerald-700 dark:text-emerald-500' : 'text-red-700 dark:text-red-500'
               }
             >
-              {chain.ok ? 'intact' : `broken at ${chain.brokenAt}`}
+              {chain.ok ? 'intact' : `broken at ${chain.brokenAt} (${chain.reason})`}
             </span>
+          </span>
+          <span className="px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800">
+            {chain.signed} entr{chain.signed === 1 ? 'y' : 'ies'} signed
+            {chain.unsigned > 0 && ` · ${chain.unsigned} predating signatures`}
           </span>
           <span className="px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800">
             {merchant.orders} order{merchant.orders === 1 ? '' : 's'} ·{' '}

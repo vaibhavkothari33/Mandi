@@ -224,7 +224,10 @@ export default async function SessionPage({ params }: PageProps<'/sessions/[id]'
         <h2 className="text-sm font-medium">Everything that happened</h2>
         <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
           Each entry is sealed with the one before it, so this record cannot be edited after the
-          fact without breaking the chain.
+          fact without breaking the chain — and each is signed with the merchant&rsquo;s Ed25519
+          key, so an entry cannot be rewritten and re-chained by anyone who lacks that key. The
+          public half is published at{' '}
+          <code className="font-mono text-xs">/.well-known/jwks.json</code>.
         </p>
 
         <ol className="mt-5 border-l border-neutral-200 dark:border-neutral-800 ml-2">
@@ -260,6 +263,20 @@ export default async function SessionPage({ params }: PageProps<'/sessions/[id]'
                     {' '}
                     ← {entry.prev_hash ? entry.prev_hash.slice(0, 12) : 'first entry'}
                   </span>
+                </div>
+
+                <div className="mt-0.5 font-mono text-[11px] break-all">
+                  {entry.signature ? (
+                    <span className="text-emerald-700 dark:text-emerald-500">
+                      signed {entry.signature.slice(0, 16)}
+                      <span className="text-neutral-400 dark:text-neutral-600">
+                        {' '}
+                        · {entry.kid}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-neutral-400">unsigned — predates entry signing</span>
+                  )}
                 </div>
               </li>
             )

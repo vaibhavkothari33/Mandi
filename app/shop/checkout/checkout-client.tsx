@@ -31,6 +31,8 @@ interface Paid {
   reference: string
   amountPaise: number
   checks: number
+  /** False when the provider accepted the instruction but confirmed no capture. */
+  captured: boolean
 }
 
 const ADDRESS = {
@@ -120,7 +122,10 @@ export function CheckoutClient({ products }: { products: Product[] }) {
         claim_token: quoted.claimToken,
       })
 
-      if (result.status !== 200) {
+      // 200 is a confirmed capture; 202 means the gate authorised the charge
+      // and the provider has the instruction but has not confirmed the money
+      // moved. Both cleared the gate, and neither may be retried.
+      if (result.status !== 200 && result.status !== 202) {
         setError(result.json?.error?.message ?? 'the gate refused this payment')
         return
       }
@@ -131,6 +136,7 @@ export function CheckoutClient({ products }: { products: Product[] }) {
         reference: result.json.payment.reference,
         amountPaise: result.json.payment.amount_paise,
         checks: (result.json.checks as unknown[]).length,
+        captured: result.status === 200,
       })
     } finally {
       setBusy(false)
@@ -139,12 +145,28 @@ export function CheckoutClient({ products }: { products: Product[] }) {
 
   if (paid) {
     return (
-      <div className="rounded-lg border border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-6">
-        <div className="text-lg font-medium">Paid {formatInr(paid.amountPaise)}</div>
+      <div
+        className={`rounded-lg border p-6 ${
+          paid.captured
+            ? 'border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30'
+            : 'border-amber-300 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30'
+        }`}
+      >
+        <div className="text-lg font-medium">
+          {paid.captured
+            ? `Paid ${formatInr(paid.amountPaise)}`
+            : `Authorised ${formatInr(paid.amountPaise)}`}
+        </div>
         <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
           Razorpay reference <span className="font-mono text-xs">{paid.reference}</span>. All{' '}
           {paid.checks} gate checks passed — the same ones an agent purchase goes through.
         </p>
+        {!paid.captured && (
+          <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
+            The payment is not captured yet. Razorpay has the instruction; this order completes
+            when its signed capture webhook arrives, and not before.
+          </p>
+        )}
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
             href={`/sessions/${paid.sessionId}`}

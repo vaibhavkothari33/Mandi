@@ -52,10 +52,13 @@ export default async function OrdersPage() {
     )
     .all() as unknown as Row[]
 
-  // A checkout that was never paid for is not an order. Keeping the two apart
-  // is why this page and the landing page now agree on what "recent" means.
+  // Three buckets, not two. A checkout that was never paid for is not an
+  // order — but neither is one whose charge is still out with the provider.
+  // Counting an unconfirmed capture as revenue is exactly the mistake the
+  // `pending_payment` state exists to prevent.
   const orders = rows.filter((r) => r.status === 'completed')
-  const abandoned = rows.filter((r) => r.status !== 'completed')
+  const pending = rows.filter((r) => r.status === 'pending_payment')
+  const abandoned = rows.filter((r) => r.status !== 'completed' && r.status !== 'pending_payment')
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-14">
@@ -85,6 +88,21 @@ export default async function OrdersPage() {
           </div>
           <List rows={orders} />
         </>
+      )}
+
+      {pending.length > 0 && (
+        <section className="mt-14">
+          <h2 className="text-sm font-medium text-neutral-500 uppercase tracking-wide">
+            Awaiting capture
+          </h2>
+          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 max-w-2xl text-pretty">
+            {pending.length} checkout{pending.length === 1 ? ' has' : 's have'} an authorised
+            instruction with the payment provider that has not been confirmed captured. The
+            mandate is spent and the cart is frozen, but no money is counted until the
+            provider&rsquo;s signed webhook says it moved.
+          </p>
+          <List rows={pending} />
+        </section>
       )}
 
       {abandoned.length > 0 && (
