@@ -163,14 +163,28 @@ export function CheckoutClient({ products }: { products: Product[] }) {
         </p>
         {!paid.captured && (
           <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
-            The payment is not captured yet. Razorpay has the instruction; this order completes
-            when its signed capture webhook arrives, and not before.
+            Nothing has been charged yet. Razorpay holds the instruction; this order completes when
+            its signed capture webhook arrives, and not before. Pay it below — the link is in your
+            email too.
           </p>
         )}
         <div className="mt-5 flex flex-wrap gap-3">
+          {/* An authorised order still needs paying, so that is the primary action. */}
+          {!paid.captured && (
+            <Link
+              href={`/pay/${paid.sessionId}`}
+              className="px-4 py-2 rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-sm font-medium hover:opacity-90"
+            >
+              Pay {formatInr(paid.amountPaise)}
+            </Link>
+          )}
           <Link
             href={`/sessions/${paid.sessionId}`}
-            className="px-4 py-2 rounded-md bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-sm font-medium hover:opacity-90"
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              paid.captured
+                ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:opacity-90'
+                : 'border border-neutral-300 dark:border-neutral-700 hover:bg-white dark:hover:bg-neutral-900'
+            }`}
           >
             See every decision
           </Link>

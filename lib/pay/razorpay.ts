@@ -28,13 +28,17 @@ export class RazorpayExecutor implements PaymentExecutor {
   }
 
   /**
-   * Creates a real test-mode order and a payment link for it.
+   * Creates a real test-mode order, and optionally a payment link for it.
    *
-   * The order is the payment instruction and the artifact that matters. The
-   * payment link is a convenience for a human to pay it, and test mode caps
-   * those at thirty per account — a limit on demo ergonomics, not on whether
-   * the instruction was accepted. So a refused link no longer fails the
-   * payment; the order stands and its id becomes the reference.
+   * The order is the payment instruction and the artifact that matters. A
+   * human pays it on the merchant's own `/pay/:session` page, which drives
+   * this same order through Razorpay Checkout and has no ceiling.
+   *
+   * Razorpay payment links are therefore off by default: test mode caps an
+   * account at thirty live ones, and every order created past that cap burns a
+   * request to be refused. Set `RAZORPAY_PAYMENT_LINKS=1` to ask for one
+   * anyway. Even then a refused link does not fail the payment — the order
+   * stands and its id becomes the reference.
    *
    * Nothing here is a capture. Creating an order — with or without a link —
    * only registers an instruction; the payer has not paid. So every success
@@ -80,6 +84,16 @@ export class RazorpayExecutor implements PaymentExecutor {
     } catch (err) {
       // A timeout or transport fault leaves the provider's state unknown.
       return this.indeterminate(null, (err as Error).message)
+    }
+
+    if (process.env.RAZORPAY_PAYMENT_LINKS !== '1') {
+      return {
+        outcome: 'succeeded',
+        captured: false,
+        reference: order.id,
+        providerOrderId: order.id,
+        message: 'order created; payable on the merchant checkout page',
+      }
     }
 
     try {
