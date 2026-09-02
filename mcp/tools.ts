@@ -2,7 +2,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { AgentClient, ADDRESS } from '../harness/client.ts'
 import { gateAllowed } from '../lib/http.ts'
-import { formatInr } from '../lib/money.ts'
+import { formatInr, type Paise } from '../lib/money.ts'
+import { approveUrl } from '../lib/pay/link.ts'
+import { sendApprovalRequest } from '../lib/receipt.ts'
+import { forSession as paymentsForSession } from '../lib/pay/store.ts'
+import { get as getSession } from '../lib/session/store.ts'
 import * as wallet from '../lib/wallet.ts'
 
 /**
@@ -11,8 +15,8 @@ import * as wallet from '../lib/wallet.ts'
  *
  * There is deliberately no tool here that signs a mandate. The agent can ask
  * for consent and can spend consent that already exists, but it cannot create
- * it: approval happens out of band, in `npm run approve`, standing in for a
- * wallet app on the buyer's own device.
+ * it: approval happens out of band, on a link emailed to the buyer, or on
+ * the `npm run approve` CLI. Either way the human's own device signs.
  */
 export function registerTools(server: McpServer, client = new AgentClient()): McpServer {
   const text = (body: string) => ({ content: [{ type: 'text' as const, text: body }] })
@@ -53,7 +57,7 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
   {
     title: 'Open a checkout session',
     description:
-      'Create a checkout session for the given products. Prices are set by the merchant, not by the caller.',
+      'Create a checkout session for the given products. Prices are set by the merchant, not by the caller. This only opens a session — it buys nothing and produces no payment link. Follow it with get_quote, then request_approval.',
     inputSchema: {
       items: z
         .array(z.object({ product_id: z.string(), quantity: z.number().int().min(1) }))
@@ -80,6 +84,9 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
         `  shipping ${formatInr(reply.json.totals.shipping_paise)}`,
         `  tax ${formatInr(reply.json.totals.tax_paise)}`,
         `  total ${formatInr(reply.json.totals.total_paise)}`,
+        '',
+        'Nothing is bought yet, and there is no payment link at this stage.',
+        `Next: get_quote with session_id ${reply.json.id}.`,
       ].join('\n'),
     )
   },
@@ -90,7 +97,7 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
   {
     title: 'Lock the price',
     description:
-      'Request a time-limited quote for a session. A quote must exist before approval can be requested.',
+      'Lock a time-limited price for a session. A quote must exist before approval can be requested, and it expires, so follow it with request_approval promptly.',
     inputSchema: { session_id: z.string() },
   },
   async ({ session_id }) => {
@@ -101,7 +108,12 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
     }
 
     return text(
-      `quote ${reply.json.id} for ${formatInr(reply.json.total_paise)}, valid ${reply.json.expires_in_seconds}s`,
+      [
+        `quote ${reply.json.id} for ${formatInr(reply.json.total_paise)}, valid ${reply.json.expires_in_seconds}s`,
+        '',
+        `Next: request_approval with session_id ${session_id}. That is the step that reaches the human`,
+        'and produces the link they pay on — you cannot produce one yourself.',
+      ].join('\n'),
     )
   },
   )
@@ -117,6 +129,16 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
   async ({ session_id }) => {
     try {
       const approval = wallet.request(session_id, client.agentId)
+      const link = approveUrl(approval.id)
+
+      // The consent link is emailed to the human rather than only returned to
+      // the agent: the mail is what makes it reachable from their own phone.
+      void sendApprovalRequest({
+        session: getSession(approval.session_id),
+        amountPaise: approval.amount_paise as Paise,
+        approveUrl: link,
+        agentId: approval.agent_id,
+      }).catch((err) => console.error('Approval request email failed', err))
 
       return text(
         [
@@ -124,10 +146,13 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
           `  ${approval.summary}`,
           `  total ${formatInr(approval.amount_paise)}`,
           '',
-          'The human approves in their own wallet:',
-          `  npm run approve -- ${approval.id}`,
+          'The human approves on their own device. The link has been emailed to them:',
+          `  ${link}`,
           '',
-          'Poll check_approval until it reports approved, then call complete_purchase.',
+          'Approving there also pays it, so the purchase can finish without you.',
+          `Or on the CLI: npm run approve -- ${approval.id}`,
+          '',
+          'Poll check_approval until it reports approved or paid.',
         ].join('\n'),
       )
     } catch (err) {
@@ -140,7 +165,8 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
   'check_approval',
   {
     title: 'Check whether the human has decided',
-    description: 'Report the status of an approval request: pending, approved or denied.',
+    description:
+      'Report the status of an approval request. The human may also have paid it already on the consent page, in which case there is nothing left for you to do.',
     inputSchema: { approval_id: z.string() },
   },
   async ({ approval_id }) => {
@@ -151,6 +177,25 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
     if (approval.status === 'denied') return text('denied — the human declined. Do not retry.')
     if (approval.revoked_at) {
       return text('revoked — the human withdrew this consent. Do not retry; ask again if still needed.')
+    }
+
+    // The consent page approves and spends in one press, so an approved
+    // request is often already settled by the time this is polled.
+    const session = getSession(approval.session_id)
+    const payments = paymentsForSession(approval.session_id)
+
+    if (payments.some((p) => p.status === 'captured') || session.status === 'completed') {
+      return text(
+        `paid — the human completed this themselves. Session ${session.id} is ${session.status}. ` +
+          'Do not call complete_purchase.',
+      )
+    }
+
+    if (payments.some((p) => p.status === 'authorized')) {
+      return text(
+        `approved and ordered — the human is paying it now. Session ${session.id} is ${session.status}, ` +
+          'waiting on the provider capture webhook. Do not call complete_purchase.',
+      )
     }
 
     return text(`approved — call complete_purchase with session ${approval.session_id}`)
@@ -200,6 +245,8 @@ export function registerTools(server: McpServer, client = new AgentClient()): Mc
         ...(captured
           ? []
           : [
+              `  Pay here: ${reply.json.payment.pay_url}`,
+              '  The same link has been emailed to the buyer.',
               '  The provider holds the instruction but has not confirmed the money moved.',
               '  Do not retry: the mandate is spent. The session completes when the',
               "  provider's signed capture webhook arrives.",
