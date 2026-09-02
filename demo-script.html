@@ -187,14 +187,13 @@
   <header class="masthead">
     <div class="eyebrow">Shooting script &middot; Razorpay AI Buildathon &middot; Track 01</div>
     <h1>Mandi Demo Run-of-Show</h1>
-    <p class="sub">Seven beats, three minutes. Every line to say, every key to press, in the order the camera needs them.</p>
+    <p class="sub">Five beats, two and a half minutes. Say the bold line, press the key, move on.</p>
     <div class="facts">
-      <div class="fact"><span class="k">Runtime</span><span class="v">3:00</span></div>
-      <div class="fact"><span class="k">Beats</span><span class="v">7</span></div>
-      <div class="fact"><span class="k">Spoken</span><span class="v">~460 words</span></div>
+      <div class="fact"><span class="k">Runtime</span><span class="v">2:30</span></div>
+      <div class="fact"><span class="k">Beats</span><span class="v">5</span></div>
       <div class="fact"><span class="k">Record on</span><span class="v">claude.ai</span></div>
-      <div class="fact"><span class="k">Rehearse on</span><span class="v">Claude Code CLI</span></div>
-      <div class="fact"><span class="k">Cart total</span><span class="v">&#8377;458.95</span></div>
+      <div class="fact"><span class="k">Cart</span><span class="v">&#8377;562.90</span></div>
+      <div class="fact"><span class="k">Test card</span><span class="v">4100 2800 0000 1007</span></div>
     </div>
   </header>
 
@@ -204,240 +203,151 @@
     <button class="btn" id="reset-prep">Reset prep checklist</button>
   </div>
 
-  <section class="timeline">
-    <div class="sec-head"><h2>The shape of it</h2><span class="eyebrow">segment width = real duration</span></div>
-    <div class="tl-bar">
-      <div class="tl-seg" style="flex:18" title="Beat 1 — The claim">1</div>
-      <div class="tl-seg" style="flex:37" title="Beat 2 — Attacks, live">2</div>
-      <div class="tl-seg is-hold" style="flex:40" title="Beat 3 — The buy, and the stall">3</div>
-      <div class="tl-seg" style="flex:30" title="Beat 4 — The signature">4</div>
-      <div class="tl-seg" style="flex:25" title="Beat 5 — The receipt">5</div>
-      <div class="tl-seg" style="flex:15" title="Beat 6 — Merchant">6</div>
-      <div class="tl-seg" style="flex:15" title="Beat 7 — Revoke">7</div>
-    </div>
-    <div class="tl-scale"><span>0:00</span><span>1:00</span><span>2:00</span><span>3:00</span></div>
+  <section>
+    <div class="sec-head"><h2>The pitch, in one line</h2></div>
+    <p class="prose">The agent proposes. A human consents once, on their own device. A deterministic gate decides. The model never holds spending authority.</p>
   </section>
 
   <section>
-    <div class="sec-head"><h2>Where to record</h2></div>
-    <div class="tbl-scroll">
-      <table class="cmp">
-        <thead><tr><th></th><th>Claude Code CLI</th><th>claude.ai</th></tr></thead>
-        <tbody>
-          <tr><th>Setup</th><td class="pick">Zero &mdash; <code>.mcp.json</code> ships in the repo</td><td>Tunnel plus <code>MCP_BEARER_TOKEN</code></td></tr>
-          <tr><th>Can drop mid-take</th><td class="pick">No</td><td>Yes &mdash; tunnel dies, take is lost</td></tr>
-          <tr><th>On camera</th><td>Terminal beside terminal</td><td class="pick">Tool-call cards, reads as a product</td></tr>
-          <tr><th>What it proves</th><td>Local MCP works</td><td class="pick">Remote endpoint works &mdash; the harder claim</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="prose">Record on <strong>claude.ai</strong>. It reads better to judges, and it demonstrates <code>app/api/mcp/route.ts</code> genuinely serving over HTTPS with bearer auth. Rehearse every beat on the CLI first &mdash; free, instant, no test link burned on a failed take. <code>npm run mcp:demo</code> is the deterministic emergency backup: same sequence, scripted, cannot fail.</p>
-  </section>
+    <div class="sec-head"><h2>Setup</h2><span class="eyebrow">once, before you record</span></div>
+    <pre><span class="c"># .env — both must be your ngrok domain</span>
+PUBLIC_BASE_URL=https://your-domain.ngrok-free.dev
+MCP_PUBLIC_BASE_URL=https://your-domain.ngrok-free.dev
 
-  <section>
-    <div class="sec-head"><h2>Exposing the endpoint with ngrok</h2><span class="eyebrow">claude.ai cannot reach localhost</span></div>
+npm run seed
+npm run dev                                  <span class="c"># terminal 1 — dev, not start</span>
+ngrok http 3000 --url=your-domain.ngrok-free.dev   <span class="c"># terminal 2</span></pre>
 
-    <p class="prose">Claude on the web calls connectors from Anthropic&rsquo;s infrastructure, not from your machine, so the merchant has to be on a public HTTPS address. Four steps, once.</p>
+    <p class="prose"><strong>Connector:</strong> claude.ai &rarr; Connectors &rarr; add <code>https://your-domain.ngrok-free.dev/api/mcp</code>. It must end in <code>/api/mcp</code>. When it asks to authorise, paste <code>MCP_OAUTH_APPROVAL_TOKEN</code> from <code>.env</code>.</p>
 
-    <p class="prose"><strong>1. Install and authenticate.</strong> Sign up at ngrok.com, copy the authtoken from the dashboard.</p>
-    <pre>winget install ngrok.ngrok        <span class="c"># or: npm i -g ngrok</span>
-ngrok config add-authtoken YOUR_TOKEN</pre>
-
-    <p class="prose"><strong>2. Claim your free static domain.</strong> The free plan includes one. Do this &mdash; it is the difference between re-adding the connector before every take and never touching it again.</p>
-    <pre><span class="c"># ngrok dashboard &rarr; Domains &rarr; Create Domain</span>
-<span class="c"># you get something like: mandi-demo.ngrok-free.app</span></pre>
-
-    <p class="prose"><strong>3. Start the merchant with a bearer token, then the tunnel.</strong> Two terminals.</p>
-    <pre><span class="c"># terminal 1 (PowerShell)</span>
-$env:MCP_BEARER_TOKEN = -join ((1..32) | % { '{0:x2}' -f (Get-Random -Max 256) })
-$env:MCP_BEARER_TOKEN          <span class="c"># copy this, you need it in step 4</span>
-npm start
-
-<span class="c"># terminal 2</span>
-ngrok http 3000 --url=mandi-demo.ngrok-free.app</pre>
-
-    <p class="prose">The variable must be set in the same terminal <em>before</em> <code>npm start</code> &mdash; the server process only inherits what existed when it launched.</p>
-
-    <p class="prose"><strong>4. Add the connector.</strong> Claude settings &rarr; Connectors &rarr; Add custom connector:</p>
-    <pre>URL    https://mandi-demo.ngrok-free.app/api/mcp
-Auth   Bearer &lt;the token from step 3&gt;</pre>
-
-    <p class="prose">Verify before you record. The endpoint fails closed, and each response tells you exactly where you are:</p>
-    <div class="tbl-scroll">
-      <table class="cmp">
-        <thead><tr><th>What you get</th><th>What it means</th><th>Fix</th></tr></thead>
-        <tbody>
-          <tr><th><code>503 remote_mcp_disabled</code></th><td>The server started without <code>MCP_BEARER_TOKEN</code> in its environment</td><td>Set the variable, then restart <code>npm start</code></td></tr>
-          <tr><th><code>401 unauthorized</code></th><td>Token reached the server but doesn&rsquo;t match</td><td>Re-copy it &mdash; no <code>Bearer</code> prefix in the field, no trailing newline</td></tr>
-          <tr><th>An ngrok HTML warning page</th><td>Free-tier browser interstitial, triggered by browser-like user agents</td><td>Harmless for the connector; if it does hit, upgrade or use the CLI take</td></tr>
-          <tr><th><code>ERR_NGROK_3200</code></th><td>Tunnel is up but nothing is listening on port 3000</td><td><code>npm start</code> is not running, or it took a different port</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="warn" style="margin-top:20px"><strong>Treat the tunnel as public.</strong> Anyone holding the URL and the token can drive the buyer side of your merchant. Keep both out of frame while recording, close the ngrok inspector at <code>localhost:4040</code> (it shows the token on every request), rotate the token after the shoot, and stop the tunnel when you are done.</div>
+    <p class="prose"><strong>Razorpay webhook:</strong> Dashboard &rarr; Settings &rarr; Webhooks &rarr; <code>https://your-domain.ngrok-free.dev/api/webhooks/razorpay</code>, secret <code>RAZORPAY_WEBHOOK_SECRET</code>, events <code>payment.captured</code> and <code>payment.failed</code>. Check it with <code>npm run webhook:test</code>.</p>
   </section>
 
   <section>
     <div class="sec-head"><h2>Before you hit record</h2><span class="eyebrow">ticks are saved in this browser</span></div>
     <ul class="prep" id="prep">
-      <li><label><input type="checkbox" data-id="p1"><span class="txt"><code>npm run seed</code> for clean data, then <code>npm start</code> in terminal 1 &mdash; minimise it</span></label></li>
-      <li><label><input type="checkbox" data-id="p2"><span class="txt">Terminal 2 empty and cleared, font size 16pt or larger</span></label></li>
-      <li><label><input type="checkbox" data-id="p3"><span class="txt">Browser tabs pre-opened at <code>/</code> and <code>/merchant</code>, zoom 110%</span></label></li>
-      <li><label><input type="checkbox" data-id="p4"><span class="txt">Full dry run on the CLI, then <code>npm run seed</code> again</span></label></li>
-      <li><label><input type="checkbox" data-id="p5"><span class="txt">One spare approved-but-unspent approval staged for Beat 7</span></label></li>
-      <li><label><input type="checkbox" data-id="p6"><span class="txt">ngrok tunnel up on the static domain, connector added, one test call made</span></label></li>
-      <li><label><input type="checkbox" data-id="p7"><span class="txt">Razorpay test-link budget checked &mdash; 30 per day, each live purchase burns one</span></label></li>
-      <li><label><input type="checkbox" data-id="p8"><span class="txt">ngrok inspector tab at <code>localhost:4040</code> closed &mdash; it shows the bearer token</span></label></li>
+      <li><label><input type="checkbox" data-id="p1"><span class="txt"><code>npm run seed</code>, then <code>npm run dev</code></span></label></li>
+      <li><label><input type="checkbox" data-id="p2"><span class="txt">Connector answers &mdash; make one test call in Claude</span></label></li>
+      <li><label><input type="checkbox" data-id="p3"><span class="txt"><code>npm run webhook:test</code> comes back green</span></label></li>
+      <li><label><input type="checkbox" data-id="p4"><span class="txt">Inbox open on your phone &mdash; that is Beat 4</span></label></li>
+      <li><label><input type="checkbox" data-id="p5"><span class="txt">Card <code>4100 2800 0000 1007</code> on a sticky note, off camera</span></label></li>
+      <li><label><input type="checkbox" data-id="p6"><span class="txt">Notifications off. ngrok inspector tab at <code>localhost:4040</code> closed.</span></label></li>
+      <li><label><input type="checkbox" data-id="p7"><span class="txt">One dry run on the CLI, then <code>npm run seed</code> again</span></label></li>
     </ul>
   </section>
 
   <section>
-    <div class="sec-head"><h2>The beats</h2><span class="eyebrow">say &middot; do &middot; screen</span></div>
+    <div class="sec-head"><h2>The beats</h2><span class="eyebrow">say &middot; do</span></div>
 
     <div class="beat">
-      <div class="rail"><div class="tc">0:00</div><div class="dur">18s</div><div class="num">Beat 1</div></div>
+      <div class="rail"><div class="tc">0:00</div><div class="dur">15s</div><div class="num">Beat 1</div></div>
       <div class="card">
         <h3>The claim</h3>
-        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead"><code>/</code> landing page, hero visible.</p><p class="note">No cursor movement. Let the page be still while you talk.</p></div></div>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead"><code>/</code> landing page. Still &mdash; no cursor movement.</p></div></div>
         <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>Most agentic commerce demos build the buyer &mdash; a chatbot that checks out. This is the other half: the merchant side, where the money actually moves.</p>
-          <p>The claim is one sentence. The language model never holds spending authority. It proposes. A deterministic gate verifies a signed mandate, and executes.</p>
+          <p>Most agentic commerce demos build the buyer. This is the merchant side, where the money actually moves.</p>
+          <p>One claim: the model never holds spending authority. It proposes. A gate verifies a signed mandate and executes.</p>
         </div></div>
       </div>
     </div>
 
     <div class="beat">
-      <div class="rail"><div class="tc">0:18</div><div class="dur">37s</div><div class="num">Beat 2</div></div>
+      <div class="rail"><div class="tc">0:15</div><div class="dur">25s</div><div class="num">Beat 2</div></div>
       <div class="card">
-        <h3>Attacks, live, on camera</h3>
-        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead">Same page, scrolled to the attack buttons.</p></div></div>
+        <h3>What it refuses</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead"><code>/attacks</code>. Let one refusal sit long enough to read.</p></div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>Before anything is bought &mdash; a replayed mandate, a tampered cart, a forged signature, an expired quote, an amount over the limit.</p>
+          <p>None of this is a model being careful. Each one is a check that passes or does not.</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="beat">
+      <div class="rail"><div class="tc">0:40</div><div class="dur">35s</div><div class="num">Beat 3</div></div>
+      <div class="card">
+        <h3>Claude asks, then stops</h3>
         <div class="row"><span class="chip do">Do</span><div class="body">
-          <ol class="steps">
-            <li>Click <strong>Enlarge the cart after approval</strong> &mdash; wait for the refusal to render</li>
-            <li>Click <strong>Reprice between approval and completion</strong></li>
-            <li>Click <strong>Forge the approved amount</strong></li>
-          </ol>
-          <p class="note">Five of the eight are live buttons &mdash; 1, 3, 5, 6, 7. These three read most clearly on camera.</p>
+          <p class="lead">In claude.ai, one message:</p>
+          <pre>Buy me chai and biscuits from Mandi.</pre>
+          <p class="note">It searches, opens a checkout, locks a price, asks for approval &mdash; then stops.</p>
         </div></div>
         <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>These aren&rsquo;t screenshots. Each button runs a real attack against the live gate and prints whatever it actually says.</p>
-          <p>Add items after the human approved &mdash; refused, the cart hash moved. Change the price between approval and payment &mdash; refused. Forge the amount inside the mandate &mdash; refused, the signature doesn&rsquo;t verify.</p>
-          <p>Three of the eight aren&rsquo;t buttons here. They need a completed purchase first, and each one burns a Razorpay test-mode payment link. Rather than quietly show five and imply that&rsquo;s all of them, the page says which three are missing and why.</p>
+          <p>It finds the products, locks a price for five minutes, and asks permission. Then it stops.</p>
+          <p>Not because it chose to. There is no tool here that signs a mandate. It can ask for consent and spend consent that exists. It cannot create it.</p>
         </div></div>
       </div>
     </div>
 
-    <div class="beat hold">
-      <div class="rail"><div class="tc">0:55</div><div class="dur">40s</div><div class="num">Beat 3</div></div>
+    <div class="beat">
+      <div class="rail"><div class="tc">1:15</div><div class="dur">45s</div><div class="num">Beat 4</div></div>
       <div class="card">
-        <h3>The buy, and the stall</h3>
-        <div class="row"><span class="chip do">Screen</span><div class="body"><p class="lead">Split frame &mdash; Claude on the left, terminal 2 on the right. Both legible.</p><p class="note">This is the shot the whole video exists for.</p></div></div>
+        <h3>One press, on my phone</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead">Cut to the inbox. Subject: <em>Approve &#8377;562.90 &mdash; Mandi Provisions</em>.</p></div></div>
+        <div class="row"><span class="chip say">Say</span><div class="body say">
+          <p>This lands on my device, not the agent&rsquo;s. It names who is asking, the exact cart, the exact total.</p>
+        </div></div>
         <div class="row"><span class="chip do">Do</span><div class="body">
-          <pre>buy me a steel chai tumbler</pre>
-          <p class="note">Let the four tool calls land one at a time: search_catalog &rarr; start_checkout &rarr; get_quote &rarr; request_approval.</p>
+          <p class="lead">Open it. Press <strong>Approve &amp; pay</strong>. Razorpay opens on the same page.</p>
+          <pre>4100 2800 0000 1007   <span class="c"># any future expiry, random CVV</span></pre>
         </div></div>
         <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>Claude has six tools against this merchant. Search. Open a checkout. Lock a quote. Request approval. Check approval. Complete purchase.</p>
-          <p>It searches. It opens a checkout &mdash; and notice the price came from the merchant, not from Claude. It locks a quote. It requests approval.</p>
-          <p>And then it stops.</p>
-        </div></div>
-        <div class="hold-mark">Hold &mdash; two full seconds of silence on the pending message</div>
-        <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>There is no seventh tool. Nothing in Claude&rsquo;s hands can sign consent. It&rsquo;s stuck, and it will stay stuck.</p>
+          <p>That one press signs two mandates &mdash; a spending limit, and a cart bound to this exact session, price and total &mdash; runs twelve checks, and only then places the order.</p>
         </div></div>
       </div>
     </div>
 
     <div class="beat">
-      <div class="rail"><div class="tc">1:35</div><div class="dur">30s</div><div class="num">Beat 4</div></div>
+      <div class="rail"><div class="tc">2:00</div><div class="dur">30s</div><div class="num">Beat 5</div></div>
       <div class="card">
-        <h3>The signature</h3>
-        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead">Focus terminal 2, full frame if you can.</p></div></div>
-        <div class="row"><span class="chip do">Do</span><div class="body">
-          <pre>npm run approve                 <span class="c"># show the queue</span>
-npm run approve -- apr_xxxxxxxx <span class="c"># sign</span></pre>
-          <p class="note">Point the cursor at the line reading <code>mandates signed and attached to the approval</code>.</p>
-        </div></div>
+        <h3>The capture, and the trail</h3>
+        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead">Page refreshes to <strong>Paid</strong>. Then <code>/sessions/[id]</code> &mdash; scroll the checks slowly.</p></div></div>
         <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>This is my side. A separate process, on my machine, that the agent has no path to. It&rsquo;s standing in for a wallet app on your phone.</p>
-          <p>Four fifty-eight ninety-five, one steel tumbler. I approve it &mdash; and only now do two mandates get signed. An intent mandate: a spending limit, a category, one use. And a cart mandate, bound to this session, this quote, this exact cart hash, this exact amount.</p>
+          <p>Notice what did not complete the sale. Not the click, not the agent saying it worked. Razorpay signs a capture event, the merchant verifies that signature, and only then is it done.</p>
+          <p>And here is every decision behind it. Twelve checks, hash-chained and signed. All deterministic. None of them the model choosing to behave.</p>
         </div></div>
-        <div class="row"><span class="chip do">Do</span><div class="body"><p class="lead">Cut back to Claude. It polls, sees <code>approved</code>, calls <code>complete_purchase</code>. Completed.</p></div></div>
-        <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>Claude was never able to create that. It can only spend it.</p>
-        </div></div>
-      </div>
-    </div>
-
-    <div class="beat">
-      <div class="rail"><div class="tc">2:05</div><div class="dur">25s</div><div class="num">Beat 5</div></div>
-      <div class="card">
-        <h3>The receipt</h3>
-        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead"><code>/sessions/[id]</code> for the order you just placed.</p><p class="note">Scroll the twelve checks slowly enough to read two or three of them.</p></div></div>
-        <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>Every decision behind that order. Twelve checks between the request and the charge. Mandate signature. Agent identity. Cart unchanged. Price unchanged. Quote still live. Amount within scope.</p>
-          <p>All of them deterministic. None of them the model choosing to behave.</p>
-        </div></div>
-      </div>
-    </div>
-
-    <div class="beat">
-      <div class="rail"><div class="tc">2:30</div><div class="dur">15s</div><div class="num">Beat 6</div></div>
-      <div class="card">
-        <h3>The merchant&rsquo;s side</h3>
-        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead"><code>/merchant</code> &mdash; revenue and the agent-versus-human split.</p></div></div>
-        <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>And the merchant&rsquo;s view &mdash; revenue, and how much of it came from agents rather than people. Same gate, same code path: a human buying on the storefront goes through exactly these checks.</p>
-        </div></div>
-        <div class="row"><span class="chip say">Note</span><div class="body"><p class="note">Say the words &ldquo;make a merchant transactable by an AI buyer&rdquo; here. It is the brief, verbatim.</p></div></div>
-      </div>
-    </div>
-
-    <div class="beat">
-      <div class="rail"><div class="tc">2:45</div><div class="dur">15s</div><div class="num">Beat 7</div></div>
-      <div class="card">
-        <h3>Taking it back</h3>
-        <div class="row"><span class="chip screen">Screen</span><div class="body"><p class="lead">Terminal 2.</p></div></div>
-        <div class="row"><span class="chip do">Do</span><div class="body">
-          <pre>npm run approve -- --revoke apr_yyyyyyyy</pre>
-          <p class="note">Then have the agent try <code>complete_purchase</code> on it. Refused.</p>
-        </div></div>
-        <div class="row"><span class="chip say">Say</span><div class="body say">
-          <p>Consent I already granted, withdrawn. And revoking doesn&rsquo;t just set a flag someone has to remember to read &mdash; it consumes the mandate, so the gate refuses it by the same single-use rule that stops a replay.</p>
-          <p>An ordinary Razorpay merchant, transactable by an AI buyer. The agent can do everything except decide to spend my money.</p>
-        </div></div>
-        <div class="row"><span class="chip do">Do</span><div class="body"><p class="lead">Cut on the refusal. No outro card, no thank-you slide.</p></div></div>
+        <div class="row"><span class="chip do">Do</span><div class="body"><p class="lead">Back to Claude. Say &ldquo;done&rdquo;. It reports complete &mdash; learned from the merchant, not from you.</p></div></div>
       </div>
     </div>
   </section>
 
   <section>
-    <div class="sec-head"><h2>If there&rsquo;s room for a longer cut</h2></div>
+    <div class="sec-head"><h2>If it breaks</h2></div>
     <ul class="notes">
-      <li><span class="tag">+30s</span><span><code>npm run attacks</code> &mdash; the full eight-refusal terminal sweep, scrolling</span></li>
-      <li><span class="tag">+20s</span><span><code>/shop</code> &mdash; a human buying through the identical gate</span></li>
-      <li><span class="tag">+15s</span><span><code>npm run verify-audit</code>, if it is demo-ready on the day</span></li>
+      <li><span class="tag no">No CSS</span><span>Server booted on an old build. Restart with <code>npm run dev</code>.</span></li>
+      <li><span class="tag no">Tool not found</span><span>Connector URL is missing <code>/api</code>. Retrying the prompt will not help.</span></li>
+      <li><span class="tag no">Card refused</span><span>&ldquo;International cards are not supported&rdquo; &mdash; use <code>4100 2800 0000 1007</code>, or switch to Netbanking.</span></li>
+      <li><span class="tag no">Stuck pending</span><span>No capture webhook. Finish the take, then <code>npm run webhook:test</code>. Don&rsquo;t narrate the stall.</span></li>
+      <li><span class="tag no">Price changed</span><span>The five-minute lock expired while you talked. Say so and press again &mdash; it looks good on camera.</span></li>
     </ul>
   </section>
 
   <section>
     <div class="sec-head"><h2>Recording notes</h2></div>
     <ul class="notes">
-      <li><span class="tag">Do</span><span>Terminal font 16pt or larger. Judges watch this on laptops.</span></li>
+      <li><span class="tag">Do</span><span>One take. Cuts inside Beat 4 look like you hid a failure.</span></li>
       <li><span class="tag">Do</span><span>Move the mouse, <em>then</em> talk. Never both at once.</span></li>
-      <li><span class="tag">Do</span><span><code>npm run seed</code> after any failed take, or abandoned sessions pile into <code>/orders</code>.</span></li>
-      <li><span class="tag no">Don&rsquo;t</span><span>Narrate the file structure or read code aloud.</span></li>
-      <li><span class="tag no">Don&rsquo;t</span><span>Show <code>.well-known/jwks.json</code>. Nobody watching cares.</span></li>
-      <li><span class="tag no">Don&rsquo;t</span><span>Explain JWS mechanics. Say &ldquo;signed on the buyer&rsquo;s device&rdquo; and move on.</span></li>
-      <li><span class="tag no">Don&rsquo;t</span><span>Fake the Beat 3 pause. The real stall is the whole argument &mdash; let it be real.</span></li>
-      <li><span class="tag no">Don&rsquo;t</span><span>Say &ldquo;twelve checks&rdquo; over a screen that isn&rsquo;t showing them.</span></li>
+      <li><span class="tag">Do</span><span>Face is optional. If you have a camera, small inset bottom-right, hidden during Beat 4. No camera is fine &mdash; a phone via Windows &ldquo;connected camera&rdquo; or Iriun works, and so does no face at all.</span></li>
+      <li><span class="tag">Do</span><span>Headset mic, sit close, record somewhere with soft furnishings. Judges forgive a plain screen recording; they do not forgive audio they cannot follow.</span></li>
+      <li><span class="tag">Do</span><span><code>npm run seed</code> after any failed take.</span></li>
+      <li><span class="tag no">Don&rsquo;t</span><span>Read code aloud or narrate the file structure.</span></li>
+      <li><span class="tag no">Don&rsquo;t</span><span>Explain JWS. Say &ldquo;signed on the buyer&rsquo;s device&rdquo; and move on.</span></li>
+      <li><span class="tag no">Don&rsquo;t</span><span>Fake the wait in Beat 5. The real pause is the argument.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Spare 30 seconds?</h2></div>
+    <ul class="notes">
+      <li><span class="tag">+15s</span><span><code>npm run approve -- --revoke apr_xxxx</code>, then have Claude try to spend it</span></li>
+      <li><span class="tag">+15s</span><span><code>npm run verify-audit</code> &mdash; walks the whole log, prints <code>chain intact</code></span></li>
+      <li><span class="tag">+20s</span><span><code>/shop</code> &mdash; a human buying through the identical gate</span></li>
     </ul>
   </section>
 
   <footer>
     <span>Mandi &middot; Razorpay AI Buildathon, Track 01</span>
-    <span>7 beats &middot; 3:00 &middot; &#8377;458.95</span>
+    <span>5 beats &middot; 2:30 &middot; &#8377;562.90</span>
   </footer>
 </div>
 
