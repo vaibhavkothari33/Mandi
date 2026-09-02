@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { cartHash } from './catalog.ts'
 import { db, nowIso } from './db/client.ts'
 import { ApiError } from './http.ts'
@@ -28,7 +29,16 @@ export interface ApprovalRow {
  * merchant API: an agent can ask for consent, but only a human can grant it,
  * and mandates are signed here rather than anywhere the agent can reach.
  */
-const approvalId = (): string => `apr_${Math.random().toString(36).slice(2, 10)}`
+/**
+ * Unguessable, because the id is now a capability: it is what an emailed
+ * approve-and-pay link carries, so anyone holding it can grant the consent.
+ * `Math.random` was adequate while approval only ever happened on the CLI.
+ */
+const approvalId = (): string => `apr_${randomBytes(9).toString('base64url')}`
+
+/** One line describing what consent is being asked for, at the prices asked. */
+export const summarize = (items: { product_id: string; quantity: number; unit_price_paise: number }[]): string =>
+  items.map((i) => `${i.quantity} x ${i.product_id} @ ${formatInr(i.unit_price_paise)}`).join(', ')
 
 export function request(sessionId: string, agentId: string): ApprovalRow {
   const session = getSession(sessionId)
@@ -43,9 +53,7 @@ export function request(sessionId: string, agentId: string): ApprovalRow {
   const quote = quoteById(session.quoteId)
   if (isExpired(quote)) throw new ApiError(409, 'quote_expired', 'the quote expired; request a fresh one')
 
-  const summary = session.items
-    .map((i) => `${i.quantity} x ${i.product_id} @ ${formatInr(i.unit_price_paise)}`)
-    .join(', ')
+  const summary = summarize(session.items)
 
   return db()
     .prepare(
@@ -62,6 +70,28 @@ export function request(sessionId: string, agentId: string): ApprovalRow {
       summary,
       nowIso(),
     ) as unknown as ApprovalRow
+}
+
+/**
+ * Re-points a pending approval at a freshly issued quote.
+ *
+ * A quote lives for two minutes, which an email round trip can easily outlast.
+ * Rather than refusing a link the buyer opened four minutes later, the consent
+ * page relocks the price and rewrites the request to match — the human then
+ * approves whatever is written here, never a stale figure.
+ */
+export function rewriteQuote(id: string, quoteId: string, amountPaise: number, summary: string): ApprovalRow {
+  const approval = get(id)
+  if (approval.status !== 'pending') {
+    throw new ApiError(409, 'approval_decided', `approval is already ${approval.status}`)
+  }
+
+  return db()
+    .prepare(
+      `UPDATE approvals SET quote_id = ?, amount_paise = ?, summary = ?
+        WHERE id = ? AND status = 'pending' RETURNING *`,
+    )
+    .get(quoteId, amountPaise, summary, id) as unknown as ApprovalRow
 }
 
 export const find = (id: string): ApprovalRow | undefined =>
