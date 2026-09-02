@@ -28,7 +28,7 @@ const ACTIONS: Record<string, string> = {
   'gate.evaluate': 'Authorisation checked',
   'gate.consume': 'Approval spent',
   'payment.capture': 'Payment',
-  'webhook.settle': 'Provider confirmed',
+  'webhook.settle': 'Provider settled the payment',
   'webhook.receive': 'Provider notified us',
 }
 
@@ -249,7 +249,9 @@ export default async function SessionPage({ params }: PageProps<'/sessions/[id]'
                   <span className="text-sm">{ACTIONS[entry.action] ?? entry.action}</span>
                   {refused && entry.reason && (
                     <span className="text-xs text-red-700 dark:text-red-500">
-                      refused — {entry.reason.replace(/_/g, ' ')}
+                      {entry.action === 'webhook.settle'
+                        ? `payment failed — ${entry.reason.replace(/_/g, ' ')}`
+                        : `refused — ${entry.reason.replace(/_/g, ' ')}`}
                     </span>
                   )}
                   <time className="ml-auto text-xs text-neutral-500 tabular-nums">
