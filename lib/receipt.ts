@@ -1,5 +1,5 @@
 import { getProduct } from './catalog.ts'
-import { MERCHANT } from './config.ts'
+import { MERCHANT, TEST_CARD } from './config.ts'
 import { formatInr, type Paise } from './money.ts'
 import type { Session } from './session/store.ts'
 
@@ -252,4 +252,339 @@ export function receiptText(input: ReceiptInput): string {
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]!)
+}
+interface PaymentDueInput {
+  session: Session
+  amountPaise: Paise
+  payUrl: string
+}
+
+/**
+ * Emails the buyer a link to pay a session that is approved but uncaptured.
+ *
+ * Sent when the gate authorises a purchase the provider has not settled. It
+ * carries the merchant's own pay page rather than a Razorpay payment link, so
+ * it is not subject to the thirty-link test-mode cap. Like the receipt, it
+ * sends only when configured and never affects the payment either way.
+ */
+export async function sendPaymentDue(input: PaymentDueInput): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return
+  const recipient = process.env.RECEIPT_TO_EMAIL ?? DEFAULT_RECIPIENT
+  const recipientName = process.env.RECEIPT_TO_NAME ?? DEFAULT_NAME
+  const from = process.env.RESEND_FROM ?? 'Mandi <onboarding@resend.dev>'
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      // One payment request per session, however many times the mail is attempted.
+      'Idempotency-Key': `mandi-payment-due-${input.session.id}`,
+    },
+    body: JSON.stringify({
+      from,
+      to: [recipient],
+      subject: `Payment requested — ${MERCHANT.name} ${formatInr(input.amountPaise)}`,
+      html: paymentDueHtml({ ...input, recipientName }),
+      text: paymentDueText({ ...input, recipientName }),
+    }),
+  })
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`Resend rejected payment request (${response.status}): ${detail.slice(0, 300)}`)
+  }
+}
+
+type PaymentDueBody = PaymentDueInput & { recipientName: string }
+
+export function paymentDueHtml(input: PaymentDueBody): string {
+  const lines = input.session.items
+    .map((item) => {
+      const title = escapeHtml(getProduct(item.product_id)?.title ?? item.product_id)
+      const cell = `padding:11px 0;font-family:${SANS};font-size:13px;line-height:19px;color:${C.ink};border-bottom:1px solid ${C.hairline};`
+      return `<tr>
+                    <td style="${cell}">${title} <span style="color:${C.muted};">&times; ${item.quantity}</span></td>
+                    <td align="right" style="${cell}text-align:right;white-space:nowrap;">${formatInr((item.unit_price_paise * item.quantity) as Paise)}</td>
+                  </tr>`
+    })
+    .join('')
+
+  const preheader = `${formatInr(input.amountPaise)} is waiting to be paid for order ${escapeHtml(input.session.id)}.`
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<title>${escapeHtml(MERCHANT.name)} payment request</title>
+<style>
+  body,table,td,p,a,h1{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+  table{border-collapse:collapse !important;}
+  img{border:0;outline:none;text-decoration:none;}
+  @media only screen and (max-width:600px){ .sp{padding-left:24px !important;padding-right:24px !important;} .h1{font-size:24px !important;line-height:32px !important;} }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#ffffff;">
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${preheader}</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#ffffff;">
+  <tr>
+    <td align="center" style="padding:0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="width:560px;max-width:560px;border-left:1px solid ${C.hairline};border-right:1px solid ${C.hairline};">
+
+        <tr><td style="height:40px;line-height:40px;font-size:0;">&nbsp;</td></tr>
+
+        <tr>
+          <td align="center" class="sp" style="padding:0 40px;">
+            <img src="${RECEIPT_HEADER_IMAGE}" alt="${escapeHtml(MERCHANT.name)}" width="${HEADER_IMAGE_WIDTH}" style="display:block;width:${HEADER_IMAGE_WIDTH}px;max-width:100%;height:auto;margin:0 auto;">
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" class="sp" style="padding:34px 40px 0;">
+            <div style="font-family:${SANS};font-size:10px;line-height:14px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;color:${C.accent};">Payment requested</div>
+            <h1 class="h1" style="margin:12px 0 0;font-family:${SERIF};font-size:27px;line-height:36px;font-weight:400;color:${C.ink};">Your order is waiting to be paid</h1>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="sp" style="padding:28px 40px 0;font-family:${SANS};font-size:13px;line-height:21px;color:${C.body};">
+            <p style="margin:0 0 14px;">Hi ${escapeHtml(input.recipientName)},</p>
+            <p style="margin:0 0 14px;">You approved this purchase, and we&rsquo;ve placed the order with the provider. Nothing has been charged yet &mdash; open the link below to pay it.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="sp" style="padding:22px 40px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${lines}</table>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="sp" style="padding:24px 40px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="center" bgcolor="${C.bar}" style="background-color:${C.bar};border-radius:3px;padding:15px 20px;">
+                  <a href="${escapeHtml(input.payUrl)}" style="font-family:${SANS};font-size:15px;line-height:22px;font-weight:600;color:#ffffff;text-decoration:none;">Pay ${formatInr(input.amountPaise)}</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:12px 0 0;font-family:${SANS};font-size:11px;line-height:17px;color:${C.muted};word-break:break-all;">${escapeHtml(input.payUrl)}</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="sp" style="padding:26px 40px 0;font-family:${SANS};font-size:12px;line-height:18px;color:${C.muted};">
+            Razorpay test mode &mdash; card ${TEST_CARD}, any future expiry, any CVV. No real money moves.
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" class="sp" style="padding:26px 40px 40px;">
+            <div style="border-top:1px solid ${C.hairline};padding-top:18px;font-family:${SANS};font-size:11px;line-height:17px;color:${C.muted};">Order ${escapeHtml(input.session.id)}</div>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`
+}
+
+export function paymentDueText(input: PaymentDueBody): string {
+  return [
+    `${MERCHANT.name} — Payment requested`,
+    '='.repeat(44),
+    '',
+    `Hi ${input.recipientName},`,
+    '',
+    "You approved this purchase and we've placed the order with the provider.",
+    'Nothing has been charged yet. Pay it here:',
+    '',
+    input.payUrl,
+    '',
+    ...input.session.items.map(
+      (item) => `  ${item.quantity} x ${getProduct(item.product_id)?.title ?? item.product_id} — ${formatInr((item.unit_price_paise * item.quantity) as Paise)}`,
+    ),
+    '',
+    `AMOUNT DUE: ${formatInr(input.amountPaise)}`,
+    '',
+    `Razorpay test mode — card ${TEST_CARD}, any future expiry, any CVV.`,
+    '',
+    `Order ${input.session.id}`,
+  ].join('\n')
+}
+
+interface ApprovalRequestInput {
+  session: Session
+  amountPaise: Paise
+  approveUrl: string
+  agentId: string
+}
+
+/**
+ * Emails the human the consent link for a purchase an agent wants to make.
+ *
+ * This is the first mail in the agent flow and the one that carries authority:
+ * the link it holds is what signs the mandates. It goes out when the agent asks
+ * for approval, not when it spends — the agent has no way to reach this.
+ */
+export async function sendApprovalRequest(input: ApprovalRequestInput): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return
+  const recipient = process.env.RECEIPT_TO_EMAIL ?? DEFAULT_RECIPIENT
+  const recipientName = process.env.RECEIPT_TO_NAME ?? DEFAULT_NAME
+  const from = process.env.RESEND_FROM ?? 'Mandi <onboarding@resend.dev>'
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      // Keyed on the approval itself, so a retried request never sends twice
+      // but a genuinely new one always does.
+      'Idempotency-Key': `mandi-approval-${input.approveUrl.split('/').pop()}`,
+    },
+    body: JSON.stringify({
+      from,
+      to: [recipient],
+      subject: `Approve ${formatInr(input.amountPaise)} — ${MERCHANT.name}`,
+      html: approvalRequestHtml({ ...input, recipientName }),
+      text: approvalRequestText({ ...input, recipientName }),
+    }),
+  })
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`Resend rejected approval request (${response.status}): ${detail.slice(0, 300)}`)
+  }
+}
+
+type ApprovalRequestBody = ApprovalRequestInput & { recipientName: string }
+
+export function approvalRequestHtml(input: ApprovalRequestBody): string {
+  const lines = input.session.items
+    .map((item) => {
+      const title = escapeHtml(getProduct(item.product_id)?.title ?? item.product_id)
+      const cell = `padding:11px 0;font-family:${SANS};font-size:13px;line-height:19px;color:${C.ink};border-bottom:1px solid ${C.hairline};`
+      return `<tr>
+                    <td style="${cell}">${title} <span style="color:${C.muted};">&times; ${item.quantity}</span></td>
+                    <td align="right" style="${cell}text-align:right;white-space:nowrap;">${formatInr((item.unit_price_paise * item.quantity) as Paise)}</td>
+                  </tr>`
+    })
+    .join('')
+
+  const preheader = `${escapeHtml(input.agentId)} wants to spend ${formatInr(input.amountPaise)} on your behalf.`
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<title>${escapeHtml(MERCHANT.name)} approval request</title>
+<style>
+  body,table,td,p,a,h1{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+  table{border-collapse:collapse !important;}
+  img{border:0;outline:none;text-decoration:none;}
+  @media only screen and (max-width:600px){ .sp{padding-left:24px !important;padding-right:24px !important;} .h1{font-size:24px !important;line-height:32px !important;} }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#ffffff;">
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${preheader}</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#ffffff;">
+  <tr>
+    <td align="center" style="padding:0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="width:560px;max-width:560px;border-left:1px solid ${C.hairline};border-right:1px solid ${C.hairline};">
+
+        <tr><td style="height:40px;line-height:40px;font-size:0;">&nbsp;</td></tr>
+
+        <tr>
+          <td align="center" class="sp" style="padding:0 40px;">
+            <img src="${RECEIPT_HEADER_IMAGE}" alt="${escapeHtml(MERCHANT.name)}" width="${HEADER_IMAGE_WIDTH}" style="display:block;width:${HEADER_IMAGE_WIDTH}px;max-width:100%;height:auto;margin:0 auto;">
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" class="sp" style="padding:34px 40px 0;">
+            <div style="font-family:${SANS};font-size:10px;line-height:14px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;color:${C.accent};">Approval needed</div>
+            <h1 class="h1" style="margin:12px 0 0;font-family:${SERIF};font-size:27px;line-height:36px;font-weight:400;color:${C.ink};">An agent wants to buy this for you</h1>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="sp" style="padding:28px 40px 0;font-family:${SANS};font-size:13px;line-height:21px;color:${C.body};">
+            <p style="margin:0 0 14px;">Hi ${escapeHtml(input.recipientName)},</p>
+            <p style="margin:0 0 14px;"><strong style="color:${C.ink};">${escapeHtml(input.agentId)}</strong> has asked to spend ${formatInr(input.amountPaise)} on your behalf. It cannot approve this itself and it cannot spend more than this total. Nothing is signed until you press the button.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="sp" style="padding:22px 40px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${lines}</table>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="sp" style="padding:24px 40px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="center" bgcolor="${C.bar}" style="background-color:${C.bar};border-radius:3px;padding:15px 20px;">
+                  <a href="${escapeHtml(input.approveUrl)}" style="font-family:${SANS};font-size:15px;line-height:22px;font-weight:600;color:#ffffff;text-decoration:none;">Approve &amp; pay ${formatInr(input.amountPaise)}</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:12px 0 0;font-family:${SANS};font-size:11px;line-height:17px;color:${C.muted};word-break:break-all;">${escapeHtml(input.approveUrl)}</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="sp" style="padding:26px 40px 0;font-family:${SANS};font-size:12px;line-height:18px;color:${C.muted};">
+            If the price moves before you open this, you will be shown the new total and asked again. Razorpay test mode &mdash; card ${TEST_CARD}, any future expiry, any CVV. No real money moves.
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" class="sp" style="padding:26px 40px 40px;">
+            <div style="border-top:1px solid ${C.hairline};padding-top:18px;font-family:${SANS};font-size:11px;line-height:17px;color:${C.muted};">Order ${escapeHtml(input.session.id)}</div>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`
+}
+
+export function approvalRequestText(input: ApprovalRequestBody): string {
+  return [
+    `${MERCHANT.name} — Approval needed`,
+    '='.repeat(44),
+    '',
+    `Hi ${input.recipientName},`,
+    '',
+    `${input.agentId} has asked to spend ${formatInr(input.amountPaise)} on your behalf.`,
+    'It cannot approve this itself. Nothing is signed until you open this link:',
+    '',
+    input.approveUrl,
+    '',
+    ...input.session.items.map(
+      (item) => `  ${item.quantity} x ${getProduct(item.product_id)?.title ?? item.product_id} — ${formatInr((item.unit_price_paise * item.quantity) as Paise)}`,
+    ),
+    '',
+    `TOTAL: ${formatInr(input.amountPaise)}`,
+    '',
+    'If the price moves before you open it, you will be shown the new total and asked again.',
+    `Razorpay test mode — card ${TEST_CARD}, any future expiry, any CVV.`,
+    '',
+    `Order ${input.session.id}`,
+  ].join('\n')
 }

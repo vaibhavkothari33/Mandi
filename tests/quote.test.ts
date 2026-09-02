@@ -1,6 +1,7 @@
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { ADDRESS, freshDb } from './helpers.ts'
+import { LIMITS } from '../lib/config.ts'
 
 const ctx = freshDb()
 
@@ -59,7 +60,7 @@ test('a fresh quote carries a bounded lifetime', () => {
   const s = approved()
   assert.equal(quotes.isExpired(s.quote), false)
   assert.ok(quotes.secondsRemaining(s.quote) > 0)
-  assert.ok(quotes.secondsRemaining(s.quote) <= 120)
+  assert.ok(quotes.secondsRemaining(s.quote) <= LIMITS.quote_ttl_seconds)
 })
 
 test('a well-formed purchase passes the quote and drift checks', () => {

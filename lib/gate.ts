@@ -7,8 +7,9 @@ import { consume, drawdown, release as releaseMandate, usageCount } from './mand
 import type { CartPayload, IntentPayload } from './mandate/types.ts'
 import { verifyCart, verifyIntent } from './mandate/verify.ts'
 import type { PaymentExecutor } from './pay/executor.ts'
+import { payUrl } from './pay/link.ts'
 import { forSession as paymentsForSession, reserve, settle } from './pay/store.ts'
-import { sendPurchaseReceipt } from './receipt.ts'
+import { sendPaymentDue, sendPurchaseReceipt } from './receipt.ts'
 import { get as getSession, update as updateSession, type Session } from './session/store.ts'
 
 export interface Check {
@@ -34,6 +35,12 @@ export interface GateRequest {
   callerAgentId: string
   intentJws: string
   cartJws: string
+  /**
+   * Set when the buyer is already looking at a payment surface, so the
+   * "your order is waiting to be paid" mail would land while they are paying
+   * it. The consent page sets it; an agent completing on its own does not.
+   */
+  buyerPresent?: boolean
 }
 
 /**
@@ -321,6 +328,16 @@ export async function authorize(
       },
     })
 
+    // The buyer still has to pay. The merchant's own page drives the order
+    // that was just created, so it is what gets handed back and mailed out.
+    const url = payUrl(pending.id)
+
+    if (!request.buyerPresent) {
+      void sendPaymentDue({ session: pending, amountPaise: cart.amount_paise, payUrl: url }).catch((err) =>
+        console.error('Payment request email failed', err),
+      )
+    }
+
     return {
       decision,
       status: 202,
@@ -335,6 +352,7 @@ export async function authorize(
           currency: cart.currency,
           status: 'authorized',
           detail: result.message,
+          pay_url: url,
         },
         mandate: { intent: intent.jti, cart: cart.jti },
         checks: decision.checks,
