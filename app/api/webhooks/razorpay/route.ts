@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { append } from '@/lib/audit'
 import { db } from '@/lib/db/client'
-import { release as releaseMandate } from '@/lib/mandate/store'
+import { consume as consumeMandate, release as releaseMandate } from '@/lib/mandate/store'
 import { settle } from '@/lib/pay/store'
 import { sendPurchaseReceipt } from '@/lib/receipt'
 import { get as getSession, update as updateSession } from '@/lib/session/store'
@@ -23,6 +23,17 @@ function cartMandateFor(sessionId: string): string | null {
       `SELECT id FROM mandates
         WHERE session_id = ? AND kind = 'cart' AND consumed_at IS NOT NULL
         ORDER BY consumed_at DESC LIMIT 1`,
+    )
+    .get(sessionId) as { id: string } | undefined
+  return row?.id ?? null
+}
+
+/** The cart mandate for a session whether or not it is currently burnt. */
+function anyCartMandateFor(sessionId: string): string | null {
+  const row = db()
+    .prepare(
+      `SELECT id FROM mandates WHERE session_id = ? AND kind = 'cart'
+        ORDER BY issued_at DESC LIMIT 1`,
     )
     .get(sessionId) as { id: string } | undefined
   return row?.id ?? null
@@ -100,9 +111,28 @@ export async function POST(request: Request) {
   const session = getSession(payment.session_id)
   let moved = false
 
-  if (session.status === 'pending_payment') {
-    if (captured) {
-      const completed = updateSession(session.id, session.version, { status: 'completed' })
+  if (captured) {
+    // A confirmed capture is the final word, and it can arrive at a session
+    // this route already unwound: a card that declines and is then retried in
+    // the same checkout produces payment.failed followed by payment.captured.
+    // Completing only from `pending_payment` left those orders paid for but
+    // unfinished, so any state a payment can still be settled from completes.
+    if (session.status === 'pending_payment' || session.status === 'ready_for_payment') {
+      // The failure released the mandate. Money moved on the retry, so burn it
+      // again rather than leaving spendable consent behind a completed sale.
+      const mandate = anyCartMandateFor(session.id)
+      if (mandate) consumeMandate(mandate)
+
+      // The machine has no edge from `ready_for_payment` straight to
+      // `completed`, and it should not: a sale is always paid for from
+      // `pending_payment`. A retry genuinely re-enters payment, so it is walked
+      // back through that state rather than the edge being widened.
+      const paying =
+        session.status === 'pending_payment'
+          ? session
+          : updateSession(session.id, session.version, { status: 'pending_payment' })
+
+      const completed = updateSession(paying.id, paying.version, { status: 'completed' })
       moved = true
 
       void sendPurchaseReceipt({
@@ -110,14 +140,14 @@ export async function POST(request: Request) {
         paymentReference: entity?.id ?? null,
         amountPaise: payment.amount_paise,
       }).catch((err) => console.error('Purchase receipt email failed', err))
-    } else {
-      // A definitive failure is safe to unwind: the buyer keeps their consent
-      // and the session becomes payable again.
-      const mandate = cartMandateFor(session.id)
-      if (mandate) releaseMandate(mandate)
-      updateSession(session.id, session.version, { status: 'ready_for_payment' })
-      moved = true
     }
+  } else if (session.status === 'pending_payment') {
+    // A definitive failure is safe to unwind: the buyer keeps their consent
+    // and the session becomes payable again.
+    const mandate = cartMandateFor(session.id)
+    if (mandate) releaseMandate(mandate)
+    updateSession(session.id, session.version, { status: 'ready_for_payment' })
+    moved = true
   }
 
   append({
