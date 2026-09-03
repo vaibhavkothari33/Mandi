@@ -86,7 +86,13 @@ const items = created.json.line_items.map((l: any) => ({
 const quote = await client.post(`/api/checkout_sessions/${id}/quote`, {})
 check('quote issued', quote.status === 201, quote.json)
 check('quote carries a deadline', typeof quote.json?.expires_at === 'string')
-check('quote expires within the advertised ttl', quote.json?.expires_in_seconds <= 120, quote.json?.expires_in_seconds)
+// Against the catalog's own `price_ttl_seconds`, not a copy of it: a quote that
+// outlived the window the merchant published is a broken promise, whatever the number is.
+check(
+  'quote expires within the advertised ttl',
+  quote.json?.expires_in_seconds <= catalog.json?.price_ttl_seconds,
+  { quoted: quote.json?.expires_in_seconds, advertised: catalog.json?.price_ttl_seconds },
+)
 
 const intent = issueIntent({
   subject: 'user_demo',
