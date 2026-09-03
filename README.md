@@ -35,7 +35,7 @@ Requires **Node 22+**. No database to install, no accounts, no API keys.
 ```bash
 npm install
 npm run seed
-npm start
+npm run dev
 ```
 
 Then, in a second terminal:
@@ -52,20 +52,27 @@ Open <http://localhost:3000>. Three views worth a look:
 | `/` | The landing page — five attacks a visitor can run against the live gate themselves |
 | `/shop` | The storefront, buying as a person |
 | `/merchant` | The shopkeeper's side — revenue, and how much of it came from agents |
+| `/orders` | Every order and what state it reached |
 | `/sessions/[id]` | Every decision behind one order, human or agent |
+| `/approve/[id]` | The consent page a human lands on from their inbox |
+| `/pay/[id]` | Merchant-hosted Razorpay checkout for an authorised order |
 
 ### Everything you can run
 
 | Command | What it does |
 |---|---|
 | `npm run seed` | Seeds the catalogue, a demo agent and a mandate signing key |
-| `npm start` | Runs the merchant |
+| `npm run dev` | Runs the merchant |
+| `npm run build && npm start` | The production build, if you want it |
 | `npm run buyer` | An honest buyer agent walks the full flow |
 | `npm run attacks` | The adversarial suite — exits non-zero on any breach |
 | `npm run smoke` | Protocol-level checks against a running merchant |
 | `npm test` | 109 unit tests |
 | `npm run approve` | The human wallet: list, approve, deny or revoke consent |
 | `npm run mcp:demo` | Drives the MCP server, showing the agent blocked at consent |
+| `npm run webhook:test` | Signs a Razorpay event and drives the capture path — proves it without the dashboard |
+| `npm run verify-audit` | Walks the whole audit log and re-checks the hash chain |
+| `npm run links` | Lists or cancels Razorpay payment links, for the test-mode quota |
 
 ---
 
@@ -74,15 +81,22 @@ Open <http://localhost:3000>. Three views worth a look:
 ```
   buyer agent  ──proposes──►  discovery → catalogue → session → quote
                                                          │
-                                              human approves in their wallet
+                                       human consents on their own device
+                                    (emailed link, or the wallet CLI) — signs
+                                          the intent and cart mandates
                                                          │
                                                          ▼
                                                    ┌───────────┐
                                                    │   GATE    │  12 deterministic checks
                                                    └───────────┘
-                                                         │
+                                                         │  authorises — does not settle
                                                          ▼
                                               Razorpay test-mode payment
+                                                         │
+                                            signed payment.captured webhook
+                                                         │  the only thing that
+                                                         ▼  completes a sale
+                                                     completed
        └───────── hash-chained, Ed25519-signed, append-only audit log ─────────┘
 ```
 
@@ -104,6 +118,39 @@ session that reads as in-flight rather than as payable.
 `completed` has exactly one predecessor, and the machine is enforced in `update()` rather than
 merely documented — there is no path that declares a sale without first declaring that an
 instruction went out.
+
+### How consent reaches a human
+
+The agent asks. The merchant emails the person who can actually say yes:
+
+```
+agent calls request_approval
+        │
+        ▼
+  email lands on the buyer's phone — who is asking, the exact cart, the exact total
+        │
+        ▼
+  one press: "Approve & pay ₹562.90"   →  /approve/[id]
+        │
+        ├── price still live  ──► signs both mandates ──► GATE ──► Razorpay checkout
+        └── price moved       ──► signs nothing, shows the new total, asks again
+```
+
+The link goes to the buyer's device, never to the agent — the agent has no tool that can
+reach it. Rendering the page signs nothing; every mandate is minted behind the POST, so a
+mail client prefetching the URL cannot spend anything.
+
+That single press collapses two steps a human would otherwise do minutes apart — approving in
+a wallet, then paying — without weakening what the merchant checks. The mandates are still
+signed buyer-side, the same twelve checks still run, and the sale still completes only on a
+signature-verified capture webhook.
+
+**A quote that expired in the inbox is relocked, not honoured.** If the relock changes what is
+owed, nothing is signed: the new total comes back for the human to confirm explicitly. Consent
+is only ever given against a live price.
+
+Two emails per purchase, never three — the approval request, then the receipt. A buyer who is
+standing at the checkout does not also get told the order is waiting to be paid.
 
 ### The mandate chain
 
@@ -169,7 +216,7 @@ completes at the new price.
 The repository ships `.mcp.json`, so Claude Code picks the server up automatically:
 
 ```bash
-claude          # from the repo root, with `npm start` running in another terminal
+claude          # from the repo root, with `npm run dev` running in another terminal
 ```
 
 Then ask it to shop:
@@ -177,7 +224,11 @@ Then ask it to shop:
 > Search the catalogue for groceries, buy two packets of chai, and get my approval first.
 
 Claude will search, open a checkout, lock a quote — and stop. It has no tool that can sign
-consent. Approve in a second terminal:
+consent.
+
+If `RESEND_API_KEY` is set, the approval request is already on your phone: open it, press
+**Approve & pay**, and the checkout opens on your own device. Otherwise — or when you would
+rather see the wallet directly — approve from a second terminal:
 
 ```bash
 npm run approve                          # lists what is waiting, and what is still live
@@ -238,12 +289,55 @@ by design.
 With no Razorpay keys the stub executor runs, observes its own capture, and completes inline —
 which is why the test suite and `npm run smoke` need no network.
 
-### Optional purchase receipt email
+You do not need the dashboard to prove any of this. `npm run webhook:test` signs a body with
+the endpoint secret exactly as Razorpay would and posts it at a running server. It refuses a
+forged signature *first* — a `200` on a signed body says nothing about whether the check works
+unless an unsigned one was rejected — then settles, replays the same event to show redelivery
+is idempotent, and asserts the session moved.
 
-After a successful purchase, Mandi can email an itemized receipt. Set `RESEND_API_KEY` and,
-if needed, `RESEND_FROM` (a Resend-verified sender) in `.env`. Leaving them unset keeps
-checkout working normally and sends no email. For the demo, receipts default to Vaibhav Kothari
-at `vaibhavkothari50@gmail.com`; use `RECEIPT_TO_EMAIL` and `RECEIPT_TO_NAME` to override it.
+### When a payment fails
+
+A declined card is not an error path bolted on afterwards; it is a state the machine already
+has a name for.
+
+Razorpay posts `payment.failed`. The route verifies the signature, marks the payment failed,
+**releases the cart mandate**, and walks the session back to `ready_for_payment` — payable
+again, by the same consent, without asking the human to approve a second time. The refusal is
+recorded in the audit log as a refusal, not as a gap.
+
+The buyer then retries in the same modal and the card succeeds. That sequence — *failed, then
+captured, on one order* — is worth calling out, because handling it wrongly is a way to take
+someone's money and never ship their goods:
+
+```bash
+npm run webhook:test -- --failed order_XXXX   # decline
+npm run webhook:test -- order_XXXX            # the retry that succeeds
+```
+
+The capture now lands on a session sitting at `ready_for_payment`, not `pending_payment`. An
+earlier version of this route completed sales only from `pending_payment`, so the retry left
+five real orders paid for and never fulfilled, with no receipt sent. The route now settles
+from either state, re-consumes the mandate the failure released, and still refuses to invent a
+transition: a sale is always completed *through* `pending_payment`, because money moving is
+never allowed to skip the state that says an instruction went out.
+
+### Optional email
+
+Mandi sends three kinds of mail, of which any one purchase sees at most two:
+
+| Mail | When |
+|---|---|
+| **Approval request** | An agent asked to spend. Carries the `Approve & pay` link — this is the one that holds authority |
+| **Payment due** | An order was authorised but the buyer was not at the checkout. Suppressed when they are |
+| **Receipt** | The capture webhook settled the sale |
+
+Set `RESEND_API_KEY` and, if needed, `RESEND_FROM` (a Resend-verified sender) in `.env`.
+Leaving them unset keeps checkout working normally and sends no email — a missing or invalid
+key never blocks a purchase. Each send is keyed with an idempotency key derived from the
+approval or session, so a retried request never mails twice.
+
+Mail goes to a single demo recipient; set `RECEIPT_TO_EMAIL` and `RECEIPT_TO_NAME` to point it
+at yourself.
 
 ### The six tools, and the one that is missing
 
@@ -286,8 +380,9 @@ Stated plainly, because a payments panel will ask.
 | Mandate chain | **Inspired by** AP2 — signed JWS, not the full W3C Verifiable Credentials stack |
 | UPI Reserve Pay | **Modelled**, not integrated. Drawdown behaves like a reserve; the NPCI rail is not available in test mode |
 | Razorpay orders | **Real** test-mode API calls with real `order_…` identifiers |
-| Razorpay payment links | Best-effort. Test mode caps them at thirty per account, so a refused link leaves the order standing rather than failing the payment |
-| Payment capture | **Not real in test mode.** No payer exists, so no capture event occurs. Accepting an order is an instruction, not money, so the gate answers `202` and parks the session at `pending_payment`. Only a signature-verified `payment.captured` webhook completes it |
+| Razorpay payment links | **Off by default.** Test mode caps them at thirty per account, which a demo exhausts quickly, so payment happens on the merchant's own hosted checkout instead. Set `RAZORPAY_PAYMENT_LINKS=1` to re-enable them |
+| Payment capture | **Real, and webhook-driven.** A test-mode card really is charged on the hosted checkout, and Razorpay really does post back `payment.captured`. Accepting an order is only an instruction, so the gate answers `202` and parks the session at `pending_payment`; nothing but a signature-verified capture event completes it |
+| Payment failure | **Real.** A declined card posts `payment.failed`, which releases the cart mandate and returns the session to `ready_for_payment` so the buyer can retry |
 | Catalogue | Seeded, not a real merchant's inventory |
 | Mandate private key | Held locally, because Mandi also plays the issuer for the demo. In production it belongs to the buyer's wallet — the merchant path only ever reads the public half |
 
@@ -302,13 +397,17 @@ app/
   page.tsx                audit dashboard
   sessions/[id]/          the full trail for one purchase
   attacks/                adversarial scorecard
+  approve/[id]/           the emailed consent page — signs mandates behind the POST
+  pay/[id]/               merchant-hosted Razorpay checkout
 lib/
   gate.ts                 the twelve checks and the authorisation path
+  consent.ts              approve-and-pay: one press, mandates signed, gate run
   mandate/                issue, verify, scope, keys, JWS
   session/                state machine and store
   quote.ts                price locking and drift detection
   pay/                    executor interface, Razorpay, stub
   wallet.ts               buyer-side signing — not reachable from the merchant API
+  receipt.ts              approval request, payment due, receipt
   audit.ts                hash-chained, Ed25519-signed append-only log
 harness/
   client.ts               signed agent client, able to forge bad requests
